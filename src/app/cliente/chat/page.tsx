@@ -91,7 +91,7 @@ function ClienteChatPageContent() {
 
   useEffect(() => {
     if (!user) return
-    const socket = connectSocket()
+    connectSocket() // Connect socket directly
     onMessageReceived((data) => {
       if (selectedChatRef.current?.id === data.chatId) {
         setMessages(prev => prev.some(m => m.id === data.message.id) ? prev : [...prev, data.message])
@@ -232,7 +232,7 @@ const ConversationList = ({ conversations, selectedChat, onSelectChat, onNewChat
               className={`w-full p-4 border-b border-slate-100 transition-colors text-left flex items-center gap-3 ${selectedChat?.id === conv.id ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
             >
               <div className="relative w-12 h-12 rounded-full bg-slate-200 flex-shrink-0">
-                {conv.tecnico?.user?.avatarUrl && <Image src={conv.tecnico.user.avatarUrl} alt={conv.tecnico.nombres} fill className="object-cover rounded-full" unoptimized />}
+                {conv.tecnico?.user?.avatarUrl && <Image src={conv.tecnico.user.avatarUrl} alt={conv.tecnico.nombres || 'Avatar del técnico'} fill className="object-cover rounded-full" unoptimized />}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-slate-800 truncate">{conv.tecnico?.nombres || 'Técnico'} {conv.tecnico?.apellidos || ''}</p>
@@ -266,7 +266,7 @@ const MessageView = ({ chat, messages, currentUser, newMessage, onNewMessageChan
           </button>
         )}
         <div className="relative w-10 h-10 rounded-full bg-slate-200 flex-shrink-0">
-          {chat.tecnico?.user?.avatarUrl && <Image src={chat.tecnico.user.avatarUrl} alt={chat.tecnico.nombres} fill className="object-cover rounded-full" unoptimized />}
+          {chat.tecnico?.user?.avatarUrl && <Image src={chat.tecnico.user.avatarUrl} alt={chat.tecnico.nombres || 'Avatar del técnico'} fill className="object-cover rounded-full" unoptimized />}
         </div>
         <div>
           <p className="font-semibold text-slate-800">{chat.tecnico?.nombres || 'Técnico'} {chat.tecnico?.apellidos || ''}</p>

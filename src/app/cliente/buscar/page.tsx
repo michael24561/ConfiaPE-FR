@@ -17,8 +17,6 @@ interface Tecnico {
   oficio: string
   descripcion: string
   ubicacion: string
-  precioMin: number
-  precioMax: number
   calificacionPromedio: number
   trabajosCompletados: number
   verificado: boolean
@@ -57,8 +55,6 @@ export default function ClienteBuscarPage() {
 
   const sortOptions = useMemo(() => [
     { value: 'rating_desc', label: 'Mejor calificados' },
-    { value: 'price_asc', label: 'Precio: más bajo a más alto' },
-    { value: 'price_desc', label: 'Precio: más alto a más bajo' },
     { value: 'name_asc', label: 'Nombre (A-Z)' },
   ], [])
 
@@ -76,6 +72,7 @@ export default function ClienteBuscarPage() {
       return
     }
     setUser(storedUser)
+    setLoading(false) // Set loading to false after user is loaded
   }, [router])
 
   useEffect(() => {
@@ -116,17 +113,13 @@ export default function ClienteBuscarPage() {
 
     const timer = setTimeout(fetchTecnicos, 300)
     return () => clearTimeout(timer)
-  }, [searchQuery, filters])
+  }, [searchQuery, filters, user]) // Add user to dependencies
 
   const sortedTecnicos = useMemo(() => {
     return [...tecnicos].sort((a, b) => {
       switch (filters.sortBy) {
         case 'rating_desc':
           return b.calificacionPromedio - a.calificacionPromedio
-        case 'price_asc':
-          return a.precioMin - b.precioMin
-        case 'price_desc':
-          return b.precioMax - a.precioMax
         case 'name_asc':
           return `${a.nombres} ${a.apellidos}`.localeCompare(`${b.nombres} ${b.apellidos}`)
         default:
@@ -272,8 +265,7 @@ export default function ClienteBuscarPage() {
                         imagen: tecnico.user.avatarUrl || '',
                         descripcion: tecnico.descripcion,
                         trabajosCompletados: tecnico.trabajosCompletados,
-                        precioMin: Number(tecnico.precioMin),
-                        precioMax: Number(tecnico.precioMax),
+                       
                         calificacionPromedio: Number(tecnico.calificacionPromedio),
                         esFavorito: tecnico.esFavorito || false
                       }}

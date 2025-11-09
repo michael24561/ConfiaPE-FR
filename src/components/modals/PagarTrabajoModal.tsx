@@ -21,7 +21,7 @@ interface Props {
   onSuccess: () => void
 }
 
-export default function PagarTrabajoModal({ isOpen, onClose, trabajo, onSuccess }: Props) {
+export default function PagarTrabajoModal({ isOpen, onClose, trabajo }: Props) {
   const [loading, setLoading] = useState(false)
   const [monto, setMonto] = useState(trabajo.precio || 0)
   const [metodoPago, setMetodoPago] = useState<'STRIPE' | 'YAPE'>('STRIPE')

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import HeaderTecnico from '@/components/tecnicocomponents/HeaderTecnico'
 import TecnicoSidebar from '@/components/tecnicocomponents/TecnicoSidebar'
-import { getStoredUser, getAccessToken } from '@/lib/auth'
+import { getAccessToken } from '@/lib/auth'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 

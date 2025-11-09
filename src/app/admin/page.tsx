@@ -8,7 +8,6 @@ import Link from 'next/link'
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
 export default function AdminDashboard() {
-  const [user, setUser] = useState<any>(null)
   const [stats, setStats] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -21,7 +20,7 @@ export default function AdminDashboard() {
         router.push('/Login')
         return;
       }
-      setUser(storedUser)
+      // setUser(storedUser) // Removed as user is not directly used in this component
 
       try {
         const token = getAccessToken()

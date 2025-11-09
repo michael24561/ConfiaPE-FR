@@ -3,9 +3,8 @@
 import { useState, useEffect, useRef } from "react"
 import HeaderTecnico from "@/components/tecnicocomponents/HeaderTecnico"
 import TecnicoSidebar from "@/components/tecnicocomponents/TecnicoSidebar"
-import { getStoredUser, me, getAccessToken } from "../../../lib/auth"
+import { me, getAccessToken } from "../../../lib/auth"
 import { useRouter } from "next/navigation"
-import Image from "next/image"
 
 interface TecnicoProfile {
   nombres: string
@@ -15,8 +14,6 @@ interface TecnicoProfile {
   ubicacion: string
   disponible: boolean
   experienciaAnios?: number
-  precioMin?: number
-  precioMax?: number
 }
 
 interface Certificado {
@@ -56,7 +53,6 @@ export default function PerfilPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [certificados, setCertificados] = useState<Certificado[]>([])
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
-  const [certificadoPreview, setCertificadoPreview] = useState<string | null>(null)
   const router = useRouter()
 
   const avatarInputRef = useRef<HTMLInputElement>(null)
@@ -71,8 +67,6 @@ export default function PerfilPage() {
     ubicacion: '',
     disponible: true,
     experienciaAnios: 0,
-    precioMin: 0,
-    precioMax: 0
   })
 
   // Cargar datos del usuario y técnico
@@ -128,8 +122,6 @@ export default function PerfilPage() {
           ubicacion: tecnico.ubicacion || '',
           disponible: tecnico.disponible !== undefined ? tecnico.disponible : true,
           experienciaAnios: tecnico.experienciaAnios || 0,
-          precioMin: tecnico.precioMin ? parseFloat(tecnico.precioMin) : 0,
-          precioMax: tecnico.precioMax ? parseFloat(tecnico.precioMax) : 0
         })
 
       } catch (err: any) {
@@ -361,15 +353,6 @@ export default function PerfilPage() {
         dataToSend.experienciaAnios = formData.experienciaAnios
       }
 
-      // Solo enviar precios si son números válidos mayores a 0
-      if (formData.precioMin && formData.precioMin > 0) {
-        dataToSend.precioMin = formData.precioMin
-      }
-
-      if (formData.precioMax && formData.precioMax > 0) {
-        dataToSend.precioMax = formData.precioMax
-      }
-
       console.log('Enviando datos:', dataToSend)
 
       const response = await fetch(`${API_URL}/api/tecnicos/me`, {
@@ -405,8 +388,6 @@ export default function PerfilPage() {
         ubicacion: updatedTecnico.ubicacion || '',
         disponible: updatedTecnico.disponible !== undefined ? updatedTecnico.disponible : true,
         experienciaAnios: updatedTecnico.experienciaAnios || 0,
-        precioMin: updatedTecnico.precioMin ? parseFloat(updatedTecnico.precioMin) : 0,
-        precioMax: updatedTecnico.precioMax ? parseFloat(updatedTecnico.precioMax) : 0
       })
 
       setSuccessMessage('✅ Perfil actualizado exitosamente')
@@ -443,8 +424,6 @@ export default function PerfilPage() {
         ubicacion: tecnicoData.ubicacion || '',
         disponible: tecnicoData.disponible !== undefined ? tecnicoData.disponible : true,
         experienciaAnios: tecnicoData.experienciaAnios || 0,
-        precioMin: tecnicoData.precioMin ? parseFloat(tecnicoData.precioMin) : 0,
-        precioMax: tecnicoData.precioMax ? parseFloat(tecnicoData.precioMax) : 0
       })
     }
   }
@@ -487,26 +466,27 @@ export default function PerfilPage() {
   const iniciales = nombreCompleto ? nombreCompleto.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : 'U'
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
+    <div className="min-h-screen bg-slate-50 text-slate-800">
       <HeaderTecnico
         onMenuClick={() => setSidebarOpen(!sidebarOpen)}
         onNotificationClick={() => setShowNotifications(!showNotifications)}
         notifications={notifications}
         user={user}
       />
-
-      <div className="flex">
-        <TecnicoSidebar />
-
-        {/* Contenido principal con margen para el sidebar */}
-        <main className="flex-1 pt-20 px-4 sm:px-8 pb-8 lg:ml-72 transition-all duration-300">
-          <div className="max-w-7xl mx-auto">
+      <div className="flex relative">
+        <TecnicoSidebar 
+          isOpen={sidebarOpen} 
+          onClose={() => setSidebarOpen(false)}
+          onToggle={() => setSidebarOpen(!sidebarOpen)}
+        />
+        <main className={`flex-1 pt-20 transition-all duration-300 ${sidebarOpen ? 'lg:ml-72' : 'lg:ml-0'}`}>
+          <div className="px-4 sm:px-8 py-8 max-w-4xl mx-auto">
             {/* Header */}
-            <div className="mb-6 lg:mb-8 px-2">
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-gray-900 mb-2">
+            <div className="mb-8">
+              <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-2">
                 Mi Perfil
               </h1>
-              <p className="text-gray-600 text-sm sm:text-base lg:text-lg">
+              <p className="text-slate-500 text-lg">
                 Gestiona tu información profesional
               </p>
             </div>
@@ -524,7 +504,7 @@ export default function PerfilPage() {
               </div>
             )}
 
-            {/* Avatar y Información principal */}
+            {/* Avatar y Info básica */}
             <div className="bg-white rounded-2xl lg:rounded-3xl shadow-lg lg:shadow-xl p-4 sm:p-6 lg:p-8 mb-6 lg:mb-8 border border-gray-100">
               <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-6 lg:mb-8 gap-4">
                 <div className="flex items-center gap-4 sm:gap-6">
@@ -699,45 +679,6 @@ export default function PerfilPage() {
                     {formData.descripcion || 'Sin descripción'}
                   </p>
                 )}
-              </div>
-
-              {/* Precios */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mb-6 lg:mb-8">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Precio Mínimo (S/)</label>
-                  {editando ? (
-                    <input
-                      type="number"
-                      value={formData.precioMin}
-                      onChange={(e) => handleInputChange('precioMin', parseFloat(e.target.value) || 0)}
-                      className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
-                      min="0"
-                      step="0.01"
-                    />
-                  ) : (
-                    <p className="text-gray-900 font-medium text-sm sm:text-base">
-                      S/ {formData.precioMin || 0}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Precio Máximo (S/)</label>
-                  {editando ? (
-                    <input
-                      type="number"
-                      value={formData.precioMax}
-                      onChange={(e) => handleInputChange('precioMax', parseFloat(e.target.value) || 0)}
-                      className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
-                      min="0"
-                      step="0.01"
-                    />
-                  ) : (
-                    <p className="text-gray-900 font-medium text-sm sm:text-base">
-                      S/ {formData.precioMax || 0}
-                    </p>
-                  )}
-                </div>
               </div>
 
               {/* Estado de disponibilidad */}

@@ -17,8 +17,7 @@ interface Tecnico {
   ubicacion: string
   calificacionPromedio: number
   trabajosCompletados: number
-  precioMin: number
-  precioMax: number
+  
   experienciaAnios: number
   verificado: boolean
   disponible: boolean
@@ -28,16 +27,6 @@ interface Tecnico {
   }
   _count: {
     reviews: number
-  }
-}
-
-interface TecnicosResponse {
-  data: Tecnico[]
-  pagination: {
-    page: number
-    limit: number
-    total: number
-    pages: number
   }
 }
 
@@ -476,9 +465,6 @@ export default function Home() {
         estrellas: t.calificacionPromedio,
         imagen: t.user?.avatarUrl || "/images/olivis.jpg",
         descripcion: t.descripcion,
-        // ✅ Pasando todos los campos de precios
-        precioMin: t.precioMin,
-        precioMax: t.precioMax, // ✅ Agregar precioMax también
         experienciaAnios: t.experienciaAnios,
         trabajosCompletados: t.trabajosCompletados,
         calificacionPromedio: t.calificacionPromedio

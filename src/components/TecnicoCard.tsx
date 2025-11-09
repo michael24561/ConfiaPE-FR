@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { Star, ShieldCheck, Briefcase, MapPin, Heart } from 'lucide-react'
+import { Star, ShieldCheck, MapPin, Heart } from 'lucide-react'
 import { getAccessToken } from '@/lib/auth'
 import { useState } from 'react'
 
@@ -16,8 +16,6 @@ interface TecnicoCardProps {
     descripcion?: string | null
     calificacionPromedio: number
     trabajosCompletados?: number
-    precioMin?: number | null
-    precioMax?: number | null
     imagen?: string | null
     verificado?: boolean
     disponible?: boolean
@@ -111,15 +109,6 @@ export default function TecnicoCard({ tecnico }: TecnicoCardProps) {
                 </div>
               )}
             </div>
-            
-            {(tecnico.precioMin && tecnico.precioMin > 0) && (
-              <div className="bg-slate-50 rounded-lg p-3 text-center">
-                <span className="text-sm text-slate-600">Desde </span>
-                <span className="text-lg font-bold text-blue-600">
-                  S/ {Number(tecnico.precioMin).toFixed(0)}+
-                </span>
-              </div>
-            )}
           </div>
         </div>
       </div>

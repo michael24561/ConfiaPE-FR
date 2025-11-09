@@ -5,10 +5,10 @@ import { use } from "react"
 import { notFound, useRouter } from "next/navigation"
 import Image from "next/image"
 import SolicitarServicioModal from "@/components/modals/SolicitarServicioModal"
-import { getAccessToken, getStoredUser } from "@/lib/auth"
+import { getStoredUser } from "@/lib/auth"
 import HeaderCliente from "@/components/clientecomponents/HeaderCliente"
 import ClienteSidebar from "@/components/clientecomponents/ClienteSidebar"
-import { Star, MapPin, Briefcase, ShieldCheck, Award, MessageSquare, Phone, DollarSign, Check } from "lucide-react"
+import { Star, MapPin, Briefcase, ShieldCheck, Award, MessageSquare, Phone, Check } from "lucide-react"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
@@ -22,7 +22,7 @@ interface Certificacion { id: string; nombre: string; imagenUrl: string; }
 interface Tecnico {
   id: string; nombres: string; apellidos: string; oficio: string; descripcion: string;
   ubicacion: string; calificacionPromedio: number | string | null; trabajosCompletados: number;
-  precioMin: number; precioMax: number; experienciaAnios: number; verificado: boolean;
+  experienciaAnios: number; verificado: boolean;
   disponible: boolean; telefono: string; email: string;
   servicios: Servicio[]; certificaciones: Certificacion[];
   user: { nombre: string; avatarUrl: string | null };
@@ -101,7 +101,13 @@ function TecnicoDetalleContent({ id }: { id: string }) {
                     </div>
                     <div className="lg:col-span-1">
                         <div className="sticky top-28 space-y-6">
-                            <RequestCard tecnico={tecnico} onSolicitar={() => setModalOpen(true)} />
+                            <div className="bg-white rounded-2xl shadow-sm p-6 border border-slate-200/60">
+                                <h3 className="text-lg font-semibold text-slate-800 mb-4">Solicitar Servicio</h3>
+                                <p className="text-sm text-slate-500 mb-5">Envía una solicitud de servicio a este técnico.</p>
+                                <button onClick={() => setModalOpen(true)} className="w-full px-5 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2">
+                                    <Check className="w-5 h-5" /> Solicitar Servicio
+                                </button>
+                            </div>
                             <ContactCard tecnico={tecnico} />
                         </div>
                     </div>
@@ -228,21 +234,6 @@ const ProfileHeader = ({ tecnico, nombreCompleto }: { tecnico: Tecnico, nombreCo
           </div>
         </a>
       )) : <p className="text-slate-500 text-center py-10 col-span-full">No hay certificaciones disponibles.</p>}
-    </div>
-  )
-  
-  const RequestCard = ({ tecnico, onSolicitar }: { tecnico: Tecnico, onSolicitar: () => void }) => (
-    <div className="bg-white rounded-2xl shadow-sm p-6 border border-slate-200/60">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-slate-800">Rango de Precios</h3>
-        <div className="px-3 py-1 bg-blue-100 text-blue-700 text-sm font-semibold rounded-full">
-          S/ {tecnico.precioMin} - {tecnico.precioMax}
-        </div>
-      </div>
-      <p className="text-sm text-slate-500 mb-5">Los precios pueden variar según la complejidad del trabajo.</p>
-      <button onClick={onSolicitar} className="w-full px-5 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2">
-        <Check className="w-5 h-5" /> Solicitar Servicio
-      </button>
     </div>
   )
   

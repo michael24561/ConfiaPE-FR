@@ -9,9 +9,7 @@ import {
   PanelLeftClose,
   Heart,
   MessageSquare,
-  User,
-  ChevronLeft,
-  ChevronRight,
+  User
 } from 'lucide-react'
 
 interface ClienteSidebarProps {

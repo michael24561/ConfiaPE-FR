@@ -5,395 +5,233 @@ import { useRouter } from "next/navigation"
 import HeaderTecnico from "@/components/tecnicocomponents/HeaderTecnico"
 import TecnicoSidebar from "@/components/tecnicocomponents/TecnicoSidebar"
 import { getStoredUser, getAccessToken } from "@/lib/auth"
+import { Star, MessageSquare, ThumbsUp, Edit } from "lucide-react"
+import Image from "next/image"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
-// Datos de ejemplo de calificaciones
-const calificacionesData = [
-  {
-    id: 1,
-    cliente: "María López",
-    trabajo: "Reparación de cortocircuito",
-    fecha: "2024-01-15",
-    calificacion: 5,
-    comentario: "Excelente trabajo, muy profesional y puntual. Resolvió el problema eléctrico rápidamente y dejó todo muy limpio.",
-    respuesta: null,
-    servicio: "Electricista",
-    precio: 120
-  },
-  {
-    id: 2,
-    cliente: "Ana Torres",
-    trabajo: "Mantenimiento preventivo",
-    fecha: "2024-01-13",
-    calificacion: 4,
-    comentario: "Buen servicio, llegó a tiempo y trabajó de manera eficiente. Solo faltó explicar un poco más el proceso.",
-    respuesta: "Gracias por tu comentario Ana. Para el próximo trabajo me aseguraré de explicar cada paso detalladamente.",
-    servicio: "Electricista",
-    precio: 95
-  },
-  {
-    id: 3,
-    cliente: "Jorge Pérez",
-    trabajo: "Instalación de luminarias",
-    fecha: "2024-01-10",
-    calificacion: 5,
-    comentario: "Muy recomendado. Explicó todo el proceso y dejó todo impecable. Las luces quedaron perfectas.",
-    respuesta: "¡Muchas gracias Jorge! Me alegra saber que quedaste satisfecho con el trabajo.",
-    servicio: "Electricista",
-    precio: 180
-  },
-  {
-    id: 4,
-    cliente: "Luis Fernández",
-    trabajo: "Instalación de tablero",
-    fecha: "2024-01-08",
-    calificacion: 5,
-    comentario: "Carlos es un excelente profesional. Trabajo de calidad y muy responsable. Lo recomiendo 100%.",
-    respuesta: "Aprecio mucho tus palabras Luis. Fue un placer trabajar contigo.",
-    servicio: "Electricista",
-    precio: 250
-  },
-  {
-    id: 5,
-    cliente: "Gloria Ramos",
-    trabajo: "Reparación de tomas",
-    fecha: "2024-01-05",
-    calificacion: 3,
-    comentario: "El trabajo estuvo bien, pero llegó un poco tarde. El resultado final fue satisfactorio.",
-    respuesta: "Gracias por tu feedback Gloria. Me disculpo por la demora y trabajaré en mejorar mi puntualidad.",
-    servicio: "Electricista",
-    precio: 80
-  },
-  {
-    id: 6,
-    cliente: "Patricia Medina",
-    trabajo: "Instalación eléctrica completa",
-    fecha: "2024-01-03",
-    calificacion: 5,
-    comentario: "Increíble profesionalismo. El trabajo fue perfecto y superó mis expectativas. Definitivamente lo volveré a contratar.",
-    respuesta: null,
-    servicio: "Electricista",
-    precio: 350
+interface Review {
+  id: string;
+  calificacion: number;
+  comentario: string;
+  respuesta: string | null;
+  fechaCreacion: string;
+  cliente: {
+    user: {
+      nombre: string;
+      avatarUrl: string | null;
+    }
   }
-]
-
-const estadisticasCalificaciones = {
-  promedio: 4.5,
-  totalCalificaciones: 6,
-  distribucion: {
-    5: 4,
-    4: 1,
-    3: 1,
-    2: 0,
-    1: 0
-  },
-  calificacionPromedio: 4.5
 }
 
-const notifications = [
-  {
-    id: 1,
-    tipo: "calificacion",
-    titulo: "Nueva calificación",
-    mensaje: "María López te calificó con 5 estrellas",
-    timestamp: "Hace 5 min",
-    leida: false
+interface Stats {
+  promedio: number;
+  total: number;
+  distribucion: {
+    '5': number; '4': number; '3': number; '2': number; '1': number;
   }
-]
+}
 
 export default function CalificacionesPage() {
-  const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [showNotifications, setShowNotifications] = useState(false)
-  const [filtro, setFiltro] = useState('todos')
-  const [respuestaEditando, setRespuestaEditando] = useState<number | null>(null)
-  const [nuevaRespuesta, setNuevaRespuesta] = useState('')
   const [user, setUser] = useState<any>(null)
-  const [calificaciones, setCalificaciones] = useState<any[]>([])
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [reviews, setReviews] = useState<Review[]>([])
+  const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
-  const [stats, setStats] = useState<any>(null)
+  const [filter, setFilter] = useState<string>('todos')
   const router = useRouter()
 
-  // Cargar calificaciones del técnico
   useEffect(() => {
-    const loadCalificaciones = async () => {
+    const storedUser = getStoredUser()
+    if (!storedUser || storedUser.rol !== 'TECNICO') {
+      router.push('/Login'); return
+    }
+    setUser(storedUser)
+  }, [router])
+
+  useEffect(() => {
+    const loadData = async () => {
+      if (!user?.perfilId) return
+      setLoading(true)
       try {
-        setLoading(true)
-        const storedUser = getStoredUser()
-        if (!storedUser || storedUser.rol !== 'TECNICO') {
-          router.push('/Login')
-          return
-        }
-        setUser(storedUser)
-        setCalificaciones(calificacionesData)
-        setStats(estadisticasCalificaciones)
+        const token = getAccessToken()
+        const headers = { 'Authorization': `Bearer ${token}` }
+        
+        const params = new URLSearchParams()
+        if (filter !== 'todos') params.append('calificacion', filter)
+
+        const [statsRes, reviewsRes] = await Promise.all([
+          fetch(`${API_URL}/api/reviews/tecnico/${user.perfilId}/stats`, { headers }),
+          fetch(`${API_URL}/api/reviews/tecnico/${user.perfilId}?${params.toString()}`, { headers })
+        ])
+
+        const statsData = await statsRes.json()
+        const reviewsData = await reviewsRes.json()
+
+        if (statsData.success) setStats(statsData.data)
+        if (reviewsData.success) setReviews(reviewsData.data.data || [])
 
       } catch (error) {
-        console.error('Error cargando calificaciones:', error)
+        console.error('Error cargando datos:', error)
       } finally {
         setLoading(false)
       }
     }
-    loadCalificaciones()
-  }, [router])
+    loadData()
+  }, [user, filter])
 
-  const calificacionesFiltradas = filtro === 'todos'
-    ? calificaciones
-    : filtro === '5'
-    ? calificaciones.filter(c => c.calificacion === 5)
-    : filtro === '4'
-    ? calificaciones.filter(c => c.calificacion === 4)
-    : filtro === '3'
-    ? calificaciones.filter(c => c.calificacion === 3)
-    : calificaciones.filter(c => c.calificacion <= 2)
-
-  const renderEstrellas = (calificacion: number) => {
-    return [...Array(5)].map((_, i) => (
-      <svg
-        key={i}
-        className={`w-5 h-5 ${i < calificacion ? 'text-yellow-400 fill-current' : 'text-gray-300'}`}
-        viewBox="0 0 20 20"
-      >
-        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-      </svg>
-    ))
+  const handleReplySuccess = (reviewId: string, newReply: string) => {
+    setReviews(prev => prev.map(r => r.id === reviewId ? { ...r, respuesta: newReply } : r))
   }
 
-  const handleResponder = (id: number) => {
-    if (nuevaRespuesta.trim()) {
-      console.log('Respondiendo a calificación:', id, nuevaRespuesta)
-      setNuevaRespuesta('')
-      setRespuestaEditando(null)
-    }
-  }
+  const filterOptions = [
+    { id: 'todos', label: 'Todas' },
+    { id: '5', label: '5 Estrellas' },
+    { id: '4', label: '4 Estrellas' },
+    { id: '3', label: '3 Estrellas' },
+    { id: '2_1', label: 'Bajas' }
+  ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
-      <HeaderTecnico 
-        onMenuClick={() => setSidebarOpen(!sidebarOpen)}
-        onNotificationClick={() => setShowNotifications(!showNotifications)}
-        notifications={notifications}
-      />
-
-      <div className="flex">
-        <TecnicoSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-
-        <main className={`flex-1 pt-20 px-4 sm:px-8 pb-8 transition-all duration-300 ${sidebarOpen ? 'lg:ml-64' : 'ml-0'}`}>
-          <div className="max-w-7xl mx-auto">
-            {/* Header */}
-            <div className="mb-8">
-              <h1 className="text-4xl font-black text-gray-900 mb-2">
-                Calificaciones y Reseñas
-              </h1>
-              <p className="text-gray-600 text-lg">
-                Revisa las opiniones de tus clientes
-              </p>
+    <div className="min-h-screen bg-slate-50 text-slate-800">
+      <HeaderTecnico onMenuClick={() => setSidebarOpen(!sidebarOpen)} onNotificationClick={() => {}} notifications={[]} user={user} />
+      <div className="flex relative">
+        <TecnicoSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} onToggle={() => setSidebarOpen(!sidebarOpen)} />
+        <main className={`flex-1 pt-20 transition-all duration-300 ${sidebarOpen ? 'lg:ml-72' : 'lg:ml-0'}`}>
+          <div className="px-4 sm:px-8 py-8 max-w-7xl mx-auto">
+            <div className="mb-10">
+              <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-2">Calificaciones y Reseñas</h1>
+              <p className="text-slate-500 text-lg">Revisa lo que tus clientes opinan de tu trabajo.</p>
             </div>
 
-            {loading && (
-              <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                <p className="text-gray-600">Cargando calificaciones...</p>
-              </div>
-            )}
-
-            {/* Estadísticas principales */}
-            {!loading && stats && (
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                <div className="bg-white rounded-3xl shadow-xl p-6 border border-gray-100">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-gray-600 text-sm font-medium">Calificación Promedio</p>
-                      <div className="flex items-center gap-2 mt-2">
-                        <span className="text-3xl font-black text-gray-900">{stats.promedio}</span>
-                        <div className="flex">
-                          {renderEstrellas(Math.floor(parseFloat(stats.promedio)))}
-                        </div>
-                      </div>
-                    </div>
-                  <div className="w-12 h-12 bg-yellow-100 rounded-2xl flex items-center justify-center">
-                    <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                    </svg>
-                  </div>
+            {loading && !stats ? (
+              <div className="flex justify-center items-center py-20"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+                  <StatCard icon={Star} label="Promedio General" value={stats?.promedio.toFixed(1) || 'N/A'} color="yellow" />
+                  <StatCard icon={MessageSquare} label="Total de Reseñas" value={stats?.total || 0} color="blue" />
+                  <StatCard icon={ThumbsUp} label="Reseñas Positivas" value={(stats?.distribucion['5'] || 0) + (stats?.distribucion['4'] || 0)} color="green" />
+                  <StatCard icon={Star} label="5 Estrellas" value={stats?.distribucion['5'] || 0} color="purple" />
                 </div>
-              </div>
 
-                <div className="bg-white rounded-3xl shadow-xl p-6 border border-gray-100">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-gray-600 text-sm font-medium">Total Calificaciones</p>
-                      <p className="text-3xl font-black text-gray-900">{stats.totalCalificaciones}</p>
-                    </div>
-                    <div className="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center">
-                      <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                    </div>
+                <div className="mb-6 border-b border-slate-200">
+                  <div className="flex items-center gap-4 sm:gap-6 overflow-x-auto pb-px">
+                    {filterOptions.map(({ id, label }) => (
+                      <button key={id} onClick={() => setFilter(id)} className={`flex-shrink-0 px-3 py-3 text-sm font-semibold transition-all duration-200 border-b-2 ${filter === id ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
+                        {label}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
-                <div className="bg-white rounded-3xl shadow-xl p-6 border border-gray-100">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-gray-600 text-sm font-medium">Calificaciones 5★</p>
-                      <p className="text-3xl font-black text-gray-900">{stats.distribucion[5]}</p>
-                    </div>
-                    <div className="w-12 h-12 bg-green-100 rounded-2xl flex items-center justify-center">
-                      <svg className="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-3xl shadow-xl p-6 border border-gray-100">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-gray-600 text-sm font-medium">Calificaciones 4★</p>
-                      <p className="text-3xl font-black text-gray-900">{stats.distribucion[4]}</p>
-                    </div>
-                    <div className="w-12 h-12 bg-purple-100 rounded-2xl flex items-center justify-center">
-                      <svg className="w-6 h-6 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Filtros */}
-            {!loading && (
-              <div className="bg-white rounded-3xl shadow-xl p-6 mb-8 border border-gray-100">
-              <div className="flex flex-wrap gap-4">
-                {[
-                  { id: 'todos', label: 'Todas' },
-                  { id: '5', label: '5 Estrellas' },
-                  { id: '4', label: '4 Estrellas' },
-                  { id: '3', label: '3 Estrellas' },
-                  { id: 'bajas', label: '2 Estrellas o menos' }
-                ].map((filtroItem) => (
-                  <button
-                    key={filtroItem.id}
-                    onClick={() => setFiltro(filtroItem.id)}
-                    className={`px-6 py-3 rounded-2xl font-bold transition-all ${
-                      filtro === filtroItem.id
-                        ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    {filtroItem.label}
-                  </button>
-                ))}
-              </div>
-              </div>
-            )}
-
-            {/* Lista de calificaciones */}
-            {!loading && (
-              <div className="space-y-6">
-              {calificacionesFiltradas.map((calificacion) => (
-                <div key={calificacion.id} className="bg-white rounded-3xl shadow-xl p-6 border border-gray-100">
-                  {/* Header de la calificación */}
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold">
-                        {calificacion.trabajo?.cliente?.user?.nombre?.charAt(0)?.toUpperCase() || 'C'}
-                      </div>
-                      <div>
-                        <h3 className="text-xl font-black text-gray-900">{calificacion.trabajo?.cliente?.user?.nombre || 'Cliente'}</h3>
-                        <p className="text-gray-600">{calificacion.trabajo?.titulo || 'Trabajo'}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <div className="flex">
-                            {renderEstrellas(calificacion.calificacion)}
-                          </div>
-                          <span className="text-sm text-gray-500">
-                            {new Date(calificacion.createdAt).toLocaleDateString('es-ES')}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-lg font-bold text-gray-900">S/ {calificacion.trabajo?.precioEstimado || 0}</p>
-                    </div>
-                  </div>
-
-                  {/* Comentario del cliente */}
-                  <div className="mb-4 p-4 bg-gray-50 rounded-2xl">
-                    <p className="text-gray-700 leading-relaxed">{calificacion.comentario}</p>
-                  </div>
-
-                  {/* Respuesta del técnico */}
-                  {calificacion.respuesta && (
-                    <div className="mb-4 p-4 bg-blue-50 rounded-2xl border border-blue-200">
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center">
-                          <span className="text-white font-bold text-xs">CM</span>
-                        </div>
-                        <span className="text-sm font-medium text-blue-800">Tu respuesta:</span>
-                      </div>
-                      <p className="text-gray-700 leading-relaxed">{calificacion.respuesta}</p>
-                    </div>
-                  )}
-
-                  {/* Formulario para responder */}
-                  {!calificacion.respuesta && (
-                    <div className="mb-4">
-                      {respuestaEditando === calificacion.id ? (
-                        <div className="p-4 bg-blue-50 rounded-2xl border border-blue-200">
-                          <textarea
-                            value={nuevaRespuesta}
-                            onChange={(e) => setNuevaRespuesta(e.target.value)}
-                            placeholder="Escribe tu respuesta..."
-                            className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                            rows={3}
-                          />
-                          <div className="flex gap-3 mt-3">
-                            <button
-                              onClick={() => handleResponder(calificacion.id)}
-                              className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-2 rounded-xl font-bold hover:scale-105 transition-all"
-                            >
-                              Responder
-                            </button>
-                            <button
-                              onClick={() => {
-                                setRespuestaEditando(null)
-                                setNuevaRespuesta('')
-                              }}
-                              className="bg-gray-300 text-gray-700 px-4 py-2 rounded-xl font-bold hover:bg-gray-400 transition-all"
-                            >
-                              Cancelar
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setRespuestaEditando(calificacion.id)}
-                          className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-2xl font-bold hover:scale-105 transition-all"
-                        >
-                          Responder al Cliente
-                        </button>
-                      )}
-                    </div>
+                <div className="space-y-6">
+                  {reviews.length === 0 ? (
+                    <div className="text-center py-16 bg-white rounded-2xl shadow-sm border border-slate-200/60"><Star className="w-16 h-16 text-slate-300 mx-auto mb-4" /><h3 className="text-xl font-semibold text-slate-800">No hay reseñas en esta categoría</h3></div>
+                  ) : (
+                    reviews.map(review => <ReviewCard key={review.id} review={review} onReplySuccess={handleReplySuccess} />)
                   )}
                 </div>
-              ))}
-
-                {calificacionesFiltradas.length === 0 && (
-                  <div className="text-center py-16">
-                    <svg className="w-24 h-24 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                    </svg>
-                    <h3 className="text-xl font-bold text-gray-900 mb-2">No hay calificaciones</h3>
-                    <p className="text-gray-500">No se encontraron calificaciones con el filtro seleccionado</p>
-                  </div>
-                )}
-              </div>
+              </>
             )}
           </div>
         </main>
       </div>
+    </div>
+  )
+}
+
+const StatCard = ({ icon: Icon, label, value, color }: any) => {
+    const colors = {
+      yellow: 'text-yellow-600 bg-yellow-100',
+      blue: 'text-blue-600 bg-blue-100',
+      green: 'text-green-600 bg-green-100',
+      purple: 'text-purple-600 bg-purple-100',
+    }
+    return (
+      <div className="bg-white rounded-2xl shadow-sm p-5 border border-slate-200/60">
+        <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-4 ${colors[color]}`}><Icon className="w-6 h-6" /></div>
+        <p className="text-3xl font-bold text-slate-900">{value}</p>
+        <p className="text-sm text-slate-500">{label}</p>
+      </div>
+    )
+}
+
+const ReviewCard = ({ review, onReplySuccess }: { review: Review, onReplySuccess: (id: string, reply: string) => void }) => {
+  const [isReplying, setIsReplying] = useState(false)
+  const [replyText, setReplyText] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+
+  const handleSaveReply = async () => {
+    if (!replyText.trim()) return
+    setIsSaving(true)
+    try {
+      const token = getAccessToken()
+      const response = await fetch(`${API_URL}/api/reviews/${review.id}/respuesta`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ respuesta: replyText })
+      })
+      const data = await response.json()
+      if (data.success) {
+        onReplySuccess(review.id, replyText)
+        setIsReplying(false)
+      } else { throw new Error(data.error || 'Error al guardar respuesta') }
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Ocurrió un error')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm p-6 border border-slate-200/60">
+      <div className="flex items-start gap-4 mb-3">
+        <div className="relative w-11 h-11 rounded-full bg-slate-200 flex-shrink-0">
+          {review.cliente.user.avatarUrl && <Image src={review.cliente.user.avatarUrl} alt={review.cliente.user.nombre} fill className="object-cover rounded-full" unoptimized />}
+        </div>
+        <div className="flex-1">
+          <p className="font-semibold text-slate-800">{review.cliente.user.nombre}</p>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-0.5">
+              {[...Array(5)].map((_, i) => <Star key={i} className={`w-4 h-4 ${i < review.calificacion ? 'text-yellow-400 fill-yellow-400' : 'text-slate-300'}`} />)}
+            </div>
+            <span className="text-xs text-slate-400">{new Date(review.fechaCreacion).toLocaleDateString('es-PE')}</span>
+          </div>
+        </div>
+      </div>
+      <p className="text-slate-600 text-sm mb-4 pl-15">{review.comentario}</p>
+      
+      {review.respuesta ? (
+        <div className="pl-15 mt-4">
+          <div className="bg-slate-100 p-4 rounded-lg">
+            <p className="text-sm font-semibold text-slate-800 mb-1">Tu respuesta</p>
+            <p className="text-sm text-slate-600">{review.respuesta}</p>
+          </div>
+        </div>
+      ) : isReplying ? (
+        <div className="pl-15 mt-4">
+          <textarea
+            value={replyText}
+            onChange={(e) => setReplyText(e.target.value)}
+            placeholder="Escribe tu respuesta..."
+            className="w-full text-sm p-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            rows={3}
+          />
+          <div className="flex items-center gap-2 mt-2">
+            <button onClick={handleSaveReply} disabled={isSaving} className="px-4 py-1.5 text-sm bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50">
+              {isSaving ? 'Guardando...' : 'Guardar'}
+            </button>
+            <button onClick={() => setIsReplying(false)} className="px-4 py-1.5 text-sm text-slate-600 font-medium rounded-lg hover:bg-slate-100">Cancelar</button>
+          </div>
+        </div>
+      ) : (
+        <div className="pl-15 mt-2">
+          <button onClick={() => setIsReplying(true)} className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-blue-600 bg-blue-100 rounded-lg hover:bg-blue-200">
+            <Edit className="w-4 h-4" /> Responder
+          </button>
+        </div>
+      )}
     </div>
   )
 }

@@ -47,17 +47,9 @@ export default function ClienteTrabajosPage() {
   const [trabajos, setTrabajos] = useState<Trabajo[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('todos')
-  const [isMobile, setIsMobile] = useState(false)
   const [calificarModal, setCalificarModal] = useState<Trabajo | null>(null)
   const [pagarModal, setPagarModal] = useState<Trabajo | null>(null)
   const router = useRouter()
-
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 1024)
-    checkMobile()
-    window.addEventListener('resize', checkMobile)
-    return () => window.removeEventListener('resize', checkMobile)
-  }, [])
 
   useEffect(() => {
     const storedUser = getStoredUser()

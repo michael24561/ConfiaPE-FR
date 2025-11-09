@@ -19,8 +19,7 @@ interface Favorito {
     oficio: string
     descripcion: string
     ubicacion: string
-    precioMin: number
-    precioMax: number
+ 
     calificacionPromedio: number
     trabajosCompletados: number
     verificado: boolean
@@ -36,15 +35,7 @@ export default function ClienteFavoritosPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [favoritos, setFavoritos] = useState<Favorito[]>([])
   const [loading, setLoading] = useState(true)
-  const [isMobile, setIsMobile] = useState(false)
   const router = useRouter()
-
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 1024)
-    checkMobile()
-    window.addEventListener('resize', checkMobile)
-    return () => window.removeEventListener('resize', checkMobile)
-  }, [])
 
   useEffect(() => {
     const storedUser = getStoredUser()
@@ -140,8 +131,6 @@ export default function ClienteFavoritosPage() {
                         descripcion: tecnico.descripcion,
                         calificacionPromedio: Number(tecnico.calificacionPromedio),
                         trabajosCompletados: tecnico.trabajosCompletados,
-                        precioMin: Number(tecnico.precioMin),
-                        precioMax: Number(tecnico.precioMax),
                         imagen: tecnico.user.avatarUrl,
                         verificado: tecnico.verificado,
                         disponible: tecnico.disponible,
