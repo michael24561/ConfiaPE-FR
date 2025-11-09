@@ -11,6 +11,9 @@ import HeaderCliente from "@/components/clientecomponents/HeaderCliente"
 import ClienteSidebar from "@/components/clientecomponents/ClienteSidebar"
 import Footer from "@/components/Footer"
 
+// ✅ URL de API centralizada
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
+
 // Tipos basados en tu API
 type TabType = 'servicios' | 'resenas' | 'certificaciones'
 
@@ -104,8 +107,6 @@ const mockServices = [
   { id: '4', nombre: 'Instalación de luminarias y tomacorrientes', descripcion: null, precio: null },
 ];
 
-
-
 // Componente principal
 export default function TecnicoDetalle({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -144,7 +145,8 @@ function TecnicoDetalleContent({ id }: { id: string }) {
         setLoading(true)
         setError(null)
         
-        const response = await fetch(`http://localhost:5000/api/tecnicos/${id}`, {
+        // ✅ CORREGIDO: Usando API_URL centralizada
+        const response = await fetch(`${API_URL}/api/tecnicos/${id}`, {
           method: 'GET',
           headers: {
             'Accept': 'application/json',
@@ -186,7 +188,8 @@ function TecnicoDetalleContent({ id }: { id: string }) {
         const token = getAccessToken()
         if (!token) return
 
-        const response = await fetch(`http://localhost:5000/api/favoritos/check/${id}`, {
+        // ✅ CORREGIDO: Usando API_URL centralizada
+        const response = await fetch(`${API_URL}/api/favoritos/check/${id}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         })
         const data = await response.json()
@@ -227,15 +230,15 @@ function TecnicoDetalleContent({ id }: { id: string }) {
       }
 
       if (isFavorite) {
-        // Eliminar
-        await fetch(`http://localhost:5000/api/favoritos/${id}`, {
+        // ✅ CORREGIDO: Usando API_URL centralizada
+        await fetch(`${API_URL}/api/favoritos/${id}`, {
           method: 'DELETE',
           headers: { 'Authorization': `Bearer ${token}` }
         })
         setIsFavorite(false)
       } else {
-        // Agregar
-        await fetch('http://localhost:5000/api/favoritos', {
+        // ✅ CORREGIDO: Usando API_URL centralizada
+        await fetch(`${API_URL}/api/favoritos`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
