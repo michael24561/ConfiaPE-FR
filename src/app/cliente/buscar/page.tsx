@@ -7,7 +7,8 @@ import ClienteSidebar from '@/components/clientecomponents/ClienteSidebar'
 import { getStoredUser, getAccessToken } from '@/lib/auth'
 import TecnicoCard from '@/components/TecnicoCard'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL_ || 'http://localhost:5000'
+// ✅ CORREGIDO: Eliminado el guión bajo al final
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
 interface Tecnico {
   id: string
@@ -69,8 +70,7 @@ export default function ClienteBuscarPage() {
   // Buscar técnicos
   useEffect(() => {
     const fetchTecnicos = async () => {
-      // 🚨 LOG 1: Mostrar los parámetros de búsqueda actuales antes de la llamada
-      console.log(`[Busqueda Tec] State: Q='${searchQuery}', Categoria='${selectedCategory}'`);
+      console.log(`[Busqueda Tec] State: Q='${searchQuery}', Categoria='${selectedCategory}'`)
 
       try {
         setLoading(true)
@@ -82,36 +82,31 @@ export default function ClienteBuscarPage() {
           params.append('q', searchQuery)
         }
         params.append('disponible', 'true')
-     
 
-        const requestUrl = `${API_URL}/api/tecnicos?${params.toString()}`;
-
-        // 🚨 LOG 2: Mostrar la URL de la API completa que se va a llamar
-        console.log(`[Busqueda Tec] Llamando a URL: ${requestUrl}`);
+        const requestUrl = `${API_URL}/api/tecnicos?${params.toString()}`
+        console.log(`[Busqueda Tec] Llamando a URL: ${requestUrl}`)
 
         // Obtener token para incluir información de favoritos
         const token = getAccessToken()
-        const headers: HeadersInit = {}
+        const headers: HeadersInit = {
+          'Content-Type': 'application/json'
+        }
         if (token) {
           headers['Authorization'] = `Bearer ${token}`
         }
 
         const response = await fetch(requestUrl, { headers })
         
-        // 🚨 LOG 3: Mostrar el código de estado de la respuesta
-        console.log(`[Busqueda Tec] Código de estado de respuesta: ${response.status}`);
+        console.log(`[Busqueda Tec] Código de estado de respuesta: ${response.status}`)
         
         if (!response.ok) {
-           // Manejar errores de red/servidor (4xx, 5xx)
-          console.error(`[Busqueda Tec] Error en la respuesta HTTP: ${response.statusText}`);
-          setTecnicos([]);
-          return;
+          console.error(`[Busqueda Tec] Error en la respuesta HTTP: ${response.statusText}`)
+          setTecnicos([])
+          return
         }
 
         const data = await response.json()
-        
-        // 🚨 LOG 4: Mostrar la respuesta completa del backend
-        console.log('[Busqueda Tec] Respuesta del backend:', data);
+        console.log('[Busqueda Tec] Respuesta del backend:', data)
         
         if (data.success) {
           // El backend puede devolver data.data.data (con paginación) o data.data (directo)
@@ -122,17 +117,13 @@ export default function ClienteBuscarPage() {
             tecnicosData = []
           }
           
-          // 🚨 LOG 5: Mostrar la cantidad de técnicos encontrados
-          console.log(`[Busqueda Tec] Éxito. Técnicos encontrados: ${tecnicosData.length}`);
-
+          console.log(`[Busqueda Tec] Éxito. Técnicos encontrados: ${tecnicosData.length}`)
           setTecnicos(tecnicosData)
         } else {
-          // 🚨 LOG 6: Mostrar el error si success es false
-          console.error('[Busqueda Tec] La respuesta indica fallo (success: false)', data.error);
+          console.error('[Busqueda Tec] La respuesta indica fallo (success: false)', data.error)
           setTecnicos([])
         }
       } catch (error) {
-        // 🚨 LOG 7: Mostrar errores de conexión o parsing
         console.error('[Busqueda Tec] Error al cargar técnicos (NetworkError/ParsingError):', error)
         setTecnicos([])
       } finally {
