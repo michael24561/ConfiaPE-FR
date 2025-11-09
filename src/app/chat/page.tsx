@@ -4,22 +4,24 @@ import { Suspense, useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Header from '@/components/Header'
 import { getStoredUser } from '@/lib/auth'
-import { getConversations, getMessages, sendMessageAPI } from '@/lib/chat'
+import { getConversations, getMessages } from '@/lib/chat'
+import {
+  connectSocket,
+  disconnectSocket,
+  joinChat,
+  leaveChat,
+  sendMessage as sendSocketMessage,
+  onMessageReceived,
+  offMessageReceived,
+  Conversation,
+  Message
+} from '@/lib/socket'
 
 // ✅ Tipos basados en tu API
 interface User {
   id: string
   nombre: string
   avatarUrl?: string
-}
-
-interface Message {
-  id: string
-  texto: string
-  timestamp: string
-  remitenteId: string
-  remitente?: User
-  leido: boolean
 }
 
 interface Tecnico {
@@ -75,7 +77,7 @@ function ChatPage() {
 
         // Cargar conversaciones usando tu función existente
         const convs = await getConversations()
-        console.log('📋 Conversaciones cargadas:', convs)
+        console.log('📋 Conversaciones cargadas (Cliente):', convs)
         const convsArray = Array.isArray(convs) ? convs : []
         setConversations(convsArray)
 
@@ -102,20 +104,68 @@ function ChatPage() {
     loadData()
   }, [router, conversationId])
 
+  // ✅ Conectar WebSocket una sola vez
+  useEffect(() => {
+    if (!user) return
+
+    const socket = connectSocket()
+    console.log('🔌 WebSocket conectado (Cliente)')
+
+    if (socket) {
+      // Listener para mensajes recibidos
+      onMessageReceived((data) => {
+        console.log('📨 Mensaje recibido (Cliente):', data)
+        
+        // Agregar mensaje a la lista solo si es del chat actual
+        if (selectedChatRef.current?.id === data.chatId) {
+          setMessages(prev => {
+            // Evitar duplicados
+            if (prev.some(m => m.id === data.message.id)) {
+              console.log('⚠️ Mensaje duplicado ignorado')
+              return prev
+            }
+            console.log('✅ Mensaje agregado a la lista del cliente')
+            return [...prev, data.message]
+          })
+        } else {
+          console.log('ℹ️ Mensaje de otro chat, no se muestra aquí')
+        }
+        
+        // Actualizar última vez del mensaje en conversaciones
+        setConversations(prev => prev.map(conv =>
+          conv.id === data.chatId
+            ? { ...conv, ultimoMensaje: data.message.texto, ultimoMensajeAt: data.message.timestamp }
+            : conv
+        ))
+      })
+    }
+
+    return () => {
+      console.log('🔌 Limpiando listeners del cliente')
+      offMessageReceived()
+      disconnectSocket()
+    }
+  }, [user])
+
   // ✅ Cargar mensajes cuando se selecciona un chat
   useEffect(() => {
     if (!selectedChat) return
 
     const loadMessages = async () => {
       try {
-        console.log('📂 Cargando mensajes del chat:', selectedChat.id)
-        // Usar tu función getMessages existente
-        const messagesData = await getMessages(selectedChat.id)
-        console.log('📨 Mensajes cargados:', messagesData)
+        console.log('📂 Cargando mensajes del chat (Cliente):', selectedChat.id)
         
-        // Manejar diferentes formatos de respuesta
-        const messagesArray = messagesData.messages || messagesData.data || messagesData || []
-        setMessages(Array.isArray(messagesArray) ? messagesArray : [])
+        // Unirse al chat via WebSocket
+        joinChat(selectedChat.id)
+        
+        // Cargar historial de mensajes via REST
+        const msgs = await getMessages(selectedChat.id)
+        const messagesArray = Array.isArray(msgs.messages) ? msgs.messages : 
+                             Array.isArray(msgs.data) ? msgs.data : 
+                             Array.isArray(msgs) ? msgs : []
+        
+        console.log('📂 Mensajes cargados (Cliente):', messagesArray.length)
+        setMessages(messagesArray)
       } catch (error) {
         console.error('Error cargando mensajes:', error)
         setError('Error al cargar los mensajes')
@@ -124,14 +174,21 @@ function ChatPage() {
     }
 
     loadMessages()
-  }, [selectedChat?.id])
+
+    return () => {
+      if (selectedChat) {
+        console.log('👋 Saliendo del chat (Cliente):', selectedChat.id)
+        leaveChat(selectedChat.id)
+      }
+    }
+  }, [selectedChat])
 
   // ✅ Auto-scroll al final
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // ✅ Enviar mensaje
+  // ✅ Enviar mensaje via WebSocket
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedChat || sending) return
 
@@ -157,28 +214,10 @@ function ChatPage() {
       const messageText = newMessage.trim()
       setNewMessage('')
 
-      console.log('📤 Enviando mensaje:', messageText)
+      console.log('📤 Enviando mensaje (Cliente):', messageText)
       
-      // Usar tu función sendMessageAPI existente
-      const sentMessage = await sendMessageAPI(selectedChat.id, messageText)
-      console.log('✅ Mensaje enviado:', sentMessage)
-
-      // Reemplazar mensaje optimista con el real del servidor
-      if (sentMessage) {
-        setMessages(prev => prev.map(msg => 
-          msg.id === optimisticMessage.id 
-            ? {
-                ...sentMessage,
-                id: sentMessage.id || msg.id,
-                timestamp: sentMessage.timestamp || msg.timestamp,
-                remitente: {
-                  id: user.id,
-                  nombre: user.nombre || user.nombres || 'Cliente'
-                }
-              }
-            : msg
-        ))
-      }
+      // ✅ ENVIAR VIA WEBSOCKET (igual que el técnico)
+      sendSocketMessage(selectedChat.id, messageText)
       
       // Actualizar última mensaje en la conversación
       setConversations(prev => prev.map(conv =>
