@@ -41,6 +41,7 @@ export default function ChatPage() {
 
         // Cargar conversaciones
         const convs = await getConversations()
+        console.log('📋 Conversaciones cargadas:', convs)
         setConversations(convs)
       } catch (error) {
         console.error('Error cargando datos:', error)
@@ -52,7 +53,7 @@ export default function ChatPage() {
     loadData()
   }, [router])
 
-  // Conectar WebSocket
+  // Conectar WebSocket (una sola vez)
   useEffect(() => {
     const socket = connectSocket()
 
@@ -72,9 +73,15 @@ export default function ChatPage() {
 
     return () => {
       offMessageReceived()
+    }
+  }, [selectedChat?.id])
+
+  // Desconectar socket solo al desmontar el componente completo
+  useEffect(() => {
+    return () => {
       disconnectSocket()
     }
-  }, [selectedChat])
+  }, [])
 
   // Cargar mensajes cuando se selecciona un chat
   useEffect(() => {
@@ -97,7 +104,7 @@ export default function ChatPage() {
         leaveChat(selectedChat.id)
       }
     }
-  }, [selectedChat])
+  }, [selectedChat?.id])
 
   // Auto-scroll al final
   useEffect(() => {
@@ -113,6 +120,7 @@ export default function ChatPage() {
       setNewMessage('')
     } catch (error) {
       console.error('Error enviando mensaje:', error)
+      alert('No se pudo enviar el mensaje. Verifica tu conexión.')
     } finally {
       setSending(false)
     }
@@ -123,6 +131,27 @@ export default function ChatPage() {
       e.preventDefault()
       handleSendMessage()
     }
+  }
+
+  // Helper functions para manejar datos que pueden ser undefined
+  const getAvatarUrl = (conv: Conversation) => {
+    return conv.tecnico?.user?.avatarUrl || null
+  }
+
+  const getInitials = (conv: Conversation) => {
+    const firstName = conv.tecnico?.nombres?.[0] || '?'
+    const lastName = conv.tecnico?.apellidos?.[0] || '?'
+    return `${firstName}${lastName}`
+  }
+
+  const getTecnicoName = (conv: Conversation) => {
+    const nombres = conv.tecnico?.nombres || 'Usuario'
+    const apellidos = conv.tecnico?.apellidos || ''
+    return `${nombres} ${apellidos}`.trim()
+  }
+
+  const getTecnicoOficio = (conv: Conversation) => {
+    return conv.tecnico?.oficio || 'Técnico'
   }
 
   if (loading) {
@@ -152,40 +181,51 @@ export default function ChatPage() {
               </div>
             ) : (
               <div>
-                {conversations.map((conv) => (
-                  <button
-                    key={conv.id}
-                    onClick={() => setSelectedChat(conv)}
-                    className={`w-full p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors text-left ${
-                      selectedChat?.id === conv.id ? 'bg-blue-50' : ''
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center flex-shrink-0">
-                        {conv.tecnico.user.avatarUrl ? (
-                          <img
-                            src={conv.tecnico.user.avatarUrl}
-                            alt={`${conv.tecnico.nombres} ${conv.tecnico.apellidos}`}
-                            className="w-full h-full rounded-full object-cover"
-                          />
-                        ) : (
-                          <span className="text-white font-bold">
-                            {conv.tecnico.nombres[0]}{conv.tecnico.apellidos[0]}
+                {conversations.map((conv) => {
+                  const avatarUrl = getAvatarUrl(conv)
+                  const initials = getInitials(conv)
+                  const name = getTecnicoName(conv)
+                  const oficio = getTecnicoOficio(conv)
+
+                  return (
+                    <button
+                      key={conv.id}
+                      onClick={() => setSelectedChat(conv)}
+                      className={`w-full p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors text-left ${
+                        selectedChat?.id === conv.id ? 'bg-blue-50' : ''
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center flex-shrink-0">
+                          {avatarUrl ? (
+                            <img
+                              src={avatarUrl}
+                              alt={name}
+                              className="w-full h-full rounded-full object-cover"
+                              onError={(e) => {
+                                // Si la imagen falla, mostrar iniciales
+                                e.currentTarget.style.display = 'none'
+                                e.currentTarget.nextElementSibling?.classList.remove('hidden')
+                              }}
+                            />
+                          ) : null}
+                          <span className={`text-white font-bold ${avatarUrl ? 'hidden' : ''}`}>
+                            {initials}
                           </span>
-                        )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-gray-900 truncate">
+                            {name}
+                          </p>
+                          <p className="text-sm text-gray-600 truncate">{oficio}</p>
+                          {conv.ultimoMensaje && (
+                            <p className="text-xs text-gray-500 truncate mt-1">{conv.ultimoMensaje}</p>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-gray-900 truncate">
-                          {conv.tecnico.nombres} {conv.tecnico.apellidos}
-                        </p>
-                        <p className="text-sm text-gray-600 truncate">{conv.tecnico.oficio}</p>
-                        {conv.ultimoMensaje && (
-                          <p className="text-xs text-gray-500 truncate mt-1">{conv.ultimoMensaje}</p>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                ))}
+                    </button>
+                  )
+                })}
               </div>
             )}
           </div>
@@ -202,23 +242,26 @@ export default function ChatPage() {
                 <div className="bg-white border-b border-gray-200 p-4">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center">
-                      {selectedChat.tecnico.user.avatarUrl ? (
+                      {getAvatarUrl(selectedChat) ? (
                         <img
-                          src={selectedChat.tecnico.user.avatarUrl}
-                          alt={`${selectedChat.tecnico.nombres} ${selectedChat.tecnico.apellidos}`}
+                          src={getAvatarUrl(selectedChat)!}
+                          alt={getTecnicoName(selectedChat)}
                           className="w-full h-full rounded-full object-cover"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none'
+                            e.currentTarget.nextElementSibling?.classList.remove('hidden')
+                          }}
                         />
-                      ) : (
-                        <span className="text-white font-bold text-sm">
-                          {selectedChat.tecnico.nombres[0]}{selectedChat.tecnico.apellidos[0]}
-                        </span>
-                      )}
+                      ) : null}
+                      <span className={`text-white font-bold text-sm ${getAvatarUrl(selectedChat) ? 'hidden' : ''}`}>
+                        {getInitials(selectedChat)}
+                      </span>
                     </div>
                     <div>
                       <p className="font-semibold text-gray-900">
-                        {selectedChat.tecnico.nombres} {selectedChat.tecnico.apellidos}
+                        {getTecnicoName(selectedChat)}
                       </p>
-                      <p className="text-sm text-gray-600">{selectedChat.tecnico.oficio}</p>
+                      <p className="text-sm text-gray-600">{getTecnicoOficio(selectedChat)}</p>
                     </div>
                   </div>
                 </div>
@@ -240,7 +283,7 @@ export default function ChatPage() {
                                 ? 'bg-blue-600 text-white'
                                 : 'bg-white text-gray-900 border border-gray-200'
                             }`}>
-                              {!isMine && (
+                              {!isMine && msg.remitente?.nombre && (
                                 <p className="text-xs font-semibold mb-1 opacity-75">
                                   {msg.remitente.nombre}
                                 </p>
