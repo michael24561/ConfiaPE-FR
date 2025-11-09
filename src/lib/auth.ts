@@ -49,6 +49,11 @@ export function getStoredUser(): AuthUser | null {
   return raw ? JSON.parse(raw) : null
 }
 
+export function saveUser(user: AuthUser) {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(USER_KEY, JSON.stringify(user))
+}
+
 export function clearSession() {
   if (typeof window === 'undefined') return
   localStorage.removeItem(USER_KEY)

@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import HeaderCliente from '@/components/clientecomponents/HeaderCliente'
 import ClienteSidebar from '@/components/clientecomponents/ClienteSidebar'
 import { getStoredUser, getAccessToken } from '@/lib/auth'
@@ -17,6 +17,8 @@ import {
   Conversation,
   Message
 } from '@/lib/socket'
+import { Send, Search, X, Plus, MessageSquare, Loader2 } from 'lucide-react'
+import Image from 'next/image'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
@@ -30,540 +32,407 @@ interface Tecnico {
   }
 }
 
-export default function ClienteChatPage() {
+// This component contains the actual logic and JSX for the page.
+// It uses useSearchParams, so it must be rendered within a <Suspense> boundary.
+function ClienteChatPageContent() {
   const [user, setUser] = useState<any>(null)
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [selectedChat, setSelectedChat] = useState<Conversation | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [newMessage, setNewMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
-  const [isMobile, setIsMobile] = useState(false)
   const [showNewChatModal, setShowNewChatModal] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [tecnicos, setTecnicos] = useState<Tecnico[]>([])
-  const [searchingTecnicos, setSearchingTecnicos] = useState(false)
-  const [creatingChat, setCreatingChat] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const selectedChatRef = useRef<Conversation | null>(null)
   const router = useRouter()
+  const searchParams = useSearchParams()
 
-  // Mantener referencia actualizada del chat seleccionado
-  useEffect(() => {
-    selectedChatRef.current = selectedChat
-  }, [selectedChat])
+  const isMobile = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth < 768;
+  }, []);
 
-  // Detectar móvil
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 1024)
-    checkMobile()
-    window.addEventListener('resize', checkMobile)
-    return () => window.removeEventListener('resize', checkMobile)
-  }, [])
+  useEffect(() => { selectedChatRef.current = selectedChat }, [selectedChat])
 
-  // Cargar usuario y conversaciones
   useEffect(() => {
     const loadData = async () => {
       try {
         const storedUser = getStoredUser()
         if (!storedUser || storedUser.rol !== 'CLIENTE') {
-          router.push('/Login')
-          return
+          router.push('/Login'); return
         }
         setUser(storedUser)
-
-        // Cargar conversaciones
         const convs = await getConversations()
         const convsArray = Array.isArray(convs) ? convs : []
         setConversations(convsArray)
-      } catch (error) {
-        console.error('Error cargando datos:', error)
-      } finally {
-        setLoading(false)
-      }
+
+        const tecnicoIdFromQuery = searchParams.get('tecnicoId')
+        if (tecnicoIdFromQuery) {
+          let chat = convsArray.find(c => c.tecnicoId === tecnicoIdFromQuery)
+          if (!chat) {
+            chat = await createConversation(tecnicoIdFromQuery)
+            if (chat) {
+              setConversations(prev => [chat, ...prev.filter(p => p.id !== chat.id)])
+            }
+          }
+          if (chat) {
+            setSelectedChat(chat)
+          }
+        } else if (convsArray.length > 0 && !isMobile) {
+          setSelectedChat(convsArray[0])
+        }
+      } catch (error) { console.error('Error loading data:', error) }
+      finally { setLoading(false) }
     }
-
     loadData()
-  }, [router])
+  }, [router, searchParams, isMobile])
 
-  // Conectar WebSocket una sola vez
   useEffect(() => {
     if (!user) return
-
     const socket = connectSocket()
-    console.log('🔌 WebSocket conectado')
-
-    if (socket) {
-      // Listener para mensajes recibidos
-      onMessageReceived((data) => {
-        console.log('📨 Mensaje recibido:', data)
-        
-        // Agregar mensaje a la lista solo si es del chat actual
-        if (selectedChatRef.current?.id === data.chatId) {
-          setMessages(prev => {
-            // Evitar duplicados
-            if (prev.some(m => m.id === data.message.id)) {
-              console.log('⚠️ Mensaje duplicado ignorado')
-              return prev
-            }
-            console.log('✅ Mensaje agregado a la lista')
-            return [...prev, data.message]
-          })
-        } else {
-          console.log('ℹ️ Mensaje de otro chat, no se muestra aquí')
-        }
-        
-        // Actualizar última vez del mensaje en conversaciones
-        setConversations(prev => prev.map(conv =>
-          conv.id === data.chatId
-            ? { ...conv, ultimoMensaje: data.message.texto, ultimoMensajeAt: data.message.timestamp }
-            : conv
-        ))
-      })
-    }
-
+    onMessageReceived((data) => {
+      if (selectedChatRef.current?.id === data.chatId) {
+        setMessages(prev => prev.some(m => m.id === data.message.id) ? prev : [...prev, data.message])
+      }
+      setConversations(prev => prev.map(conv =>
+        conv.id === data.chatId
+          ? { ...conv, ultimoMensaje: data.message.texto, ultimoMensajeAt: data.message.timestamp }
+          : conv
+      ).sort((a, b) => new Date(b.ultimoMensajeAt || 0).getTime() - new Date(a.ultimoMensajeAt || 0).getTime()))
+    })
     return () => {
-      console.log('🔌 Limpiando listeners')
       offMessageReceived()
       disconnectSocket()
     }
   }, [user])
 
-  // Cargar mensajes cuando se selecciona un chat
   useEffect(() => {
     if (!selectedChat) return
-
     const loadMessages = async () => {
-      try {
-        console.log('📂 Cargando mensajes del chat:', selectedChat.id)
-        joinChat(selectedChat.id)
-        const msgs = await getMessages(selectedChat.id)
-        const messagesArray = Array.isArray(msgs.messages) ? msgs.messages : []
-        console.log('📂 Mensajes cargados:', messagesArray.length)
-        setMessages(messagesArray)
-      } catch (error) {
-        console.error('Error cargando mensajes:', error)
-        setMessages([])
-      }
+      joinChat(selectedChat.id)
+      const msgs = await getMessages(selectedChat.id)
+      setMessages(Array.isArray(msgs.messages) ? msgs.messages : [])
     }
-
     loadMessages()
-
-    return () => {
-      if (selectedChat) {
-        console.log('👋 Saliendo del chat:', selectedChat.id)
-        leaveChat(selectedChat.id)
-      }
-    }
+    return () => { if (selectedChat) leaveChat(selectedChat.id) }
   }, [selectedChat])
 
-  // Auto-scroll al final
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedChat || sending) return
-
-    try {
-      setSending(true)
-      const messageText = newMessage.trim()
-      console.log('📤 Enviando mensaje:', messageText)
-      sendSocketMessage(selectedChat.id, messageText)
-      setNewMessage('')
-    } catch (error) {
-      console.error('Error enviando mensaje:', error)
-    } finally {
-      setSending(false)
-    }
+    setSending(true)
+    sendSocketMessage(selectedChat.id, newMessage.trim())
+    setNewMessage('')
+    setSending(false)
   }
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSendMessage()
-    }
-  }
-
-  // Buscar técnicos
-  const handleSearchTecnicos = async (query: string) => {
-    setSearchQuery(query)
-    if (query.trim().length < 2) {
-      setTecnicos([])
-      return
-    }
-
-    try {
-      setSearchingTecnicos(true)
-      const response = await fetch(`${API_URL}/api/tecnicos?q=${query}&disponible=true&limit=10`)
-      const data = await response.json()
-      
-      if (data.success) {
-        let tecnicosData = data.data
-        if (tecnicosData && tecnicosData.data && Array.isArray(tecnicosData.data)) {
-          tecnicosData = tecnicosData.data
-        } else if (!Array.isArray(tecnicosData)) {
-          tecnicosData = []
-        }
-        setTecnicos(tecnicosData)
-      } else {
-        setTecnicos([])
-      }
-    } catch (error) {
-      console.error('Error buscando técnicos:', error)
-      setTecnicos([])
-    } finally {
-      setSearchingTecnicos(false)
-    }
-  }
-
-  // Iniciar nueva conversación
   const handleStartChat = async (tecnico: Tecnico) => {
-    try {
-      setCreatingChat(true)
-      
-      // Verificar si ya existe una conversación con este técnico
-      const existingConv = conversations.find(c => c.tecnicoId === tecnico.id)
-      if (existingConv) {
-        setSelectedChat(existingConv)
-        setShowNewChatModal(false)
-        setSearchQuery('')
-        setTecnicos([])
-        return
+    let chat: Conversation | undefined | null = conversations.find(c => c.tecnicoId === tecnico.id)
+    if (!chat) {
+      chat = await createConversation(tecnico.id)
+      if (chat) {
+        setConversations(prev => [chat, ...prev.filter(p => p.id !== chat!.id)])
       }
-
-      // Crear nueva conversación
-      const newConv = await createConversation(tecnico.id)
-      
-      // Agregar a la lista de conversaciones
-      setConversations(prev => [newConv, ...prev])
-      setSelectedChat(newConv)
-      setShowNewChatModal(false)
-      setSearchQuery('')
-      setTecnicos([])
-    } catch (error) {
-      console.error('Error iniciando chat:', error)
-      alert('Error al iniciar la conversación')
-    } finally {
-      setCreatingChat(false)
     }
+    if (chat) {
+      setSelectedChat(chat)
+    }
+    setShowNewChatModal(false)
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Cargando mensajes...</p>
-        </div>
+      <div className="flex h-screen w-full items-center justify-center bg-slate-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
-      <HeaderCliente
-        onMenuClick={() => setSidebarOpen(!sidebarOpen)}
-        onNotificationClick={() => {}}
-        notifications={[]}
-        user={user}
-      />
-
+    <div className="min-h-screen bg-slate-50 text-slate-800">
+      <HeaderCliente onMenuClick={() => setSidebarOpen(!sidebarOpen)} onNotificationClick={() => {}} notifications={[]} user={user} />
       <div className="flex relative">
-        <ClienteSidebar
-          isOpen={sidebarOpen}
-          onClose={() => setSidebarOpen(false)}
-        />
-
-        {sidebarOpen && isMobile && (
-          <div
-            className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
-
-        <main className="flex-1 pt-20 lg:ml-72 transition-all duration-300">
-          <div className="h-[calc(100vh-5rem)] flex flex-col">
-            {/* Header */}
-            <div className="px-4 sm:px-8 py-4 bg-white shadow-sm">
-              <h1 className="text-2xl sm:text-3xl font-black text-gray-900">
-                Mensajes
-              </h1>
-              <p className="text-gray-600 text-sm sm:text-base">
-                Chatea con tus técnicos
-              </p>
+        <ClienteSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} onToggle={() => setSidebarOpen(!sidebarOpen)} />
+        <main className={`flex-1 pt-20 transition-all duration-300 ${sidebarOpen ? 'lg:ml-72' : 'lg:ml-0'}`}>
+          <div className="h-full flex border-t border-slate-200">
+            <div className={`
+              ${isMobile && selectedChat ? 'hidden' : 'flex'} 
+              w-full md:flex flex-col md:w-1/3 lg:w-1/4`
+            }>
+              <ConversationList
+                conversations={conversations}
+                selectedChat={selectedChat}
+                onSelectChat={setSelectedChat}
+                onNewChat={() => setShowNewChatModal(true)}
+              />
             </div>
-
-            <div className="flex-1 flex overflow-hidden">
-              {/* Lista de conversaciones */}
-              <div className="w-full md:w-1/3 lg:w-1/4 bg-white border-r border-gray-200 flex flex-col">
-                {/* Header con botón Nueva conversación */}
-                <div className="p-4 border-b border-gray-200">
-                  <button
-                    onClick={() => setShowNewChatModal(true)}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:shadow-lg transition-all duration-300 hover:scale-105 font-semibold"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    Nueva Conversación
-                  </button>
-                </div>
-
-                {/* Lista de chats */}
-                <div className="flex-1 overflow-y-auto">
-                  {conversations.length === 0 ? (
-                    <div className="p-4 text-center text-gray-500">
-                      <svg className="w-16 h-16 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                      </svg>
-                      <p className="font-medium mb-2">Sin conversaciones</p>
-                      <p className="text-sm">Inicia un chat con un técnico</p>
-                    </div>
-                  ) : (
-                    <div>
-                      {conversations.map((conv) => (
-                      <button
-                        key={conv.id}
-                        onClick={() => setSelectedChat(conv)}
-                        className={`w-full p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors text-left ${
-                          selectedChat?.id === conv.id ? 'bg-blue-50' : ''
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center flex-shrink-0">
-                            {conv.tecnico?.user?.avatarUrl ? (
-                              <img
-                                src={conv.tecnico.user.avatarUrl}
-                                alt={`${conv.tecnico.nombres} ${conv.tecnico.apellidos}`}
-                                className="w-full h-full rounded-full object-cover"
-                              />
-                            ) : (
-                              <span className="text-white font-bold">
-                                {conv.tecnico?.nombres?.[0] || 'T'}{conv.tecnico?.apellidos?.[0] || 'C'}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-gray-900 truncate">
-                              {conv.tecnico?.nombres || 'Técnico'} {conv.tecnico?.apellidos || ''}
-                            </p>
-                            <p className="text-sm text-gray-600 truncate">{conv.tecnico?.oficio || 'Sin oficio'}</p>
-                            {conv.ultimoMensaje && (
-                              <p className="text-xs text-gray-500 truncate mt-1">{conv.ultimoMensaje}</p>
-                            )}
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Área de mensajes */}
-              <div className="flex-1 flex flex-col bg-white">
-                {!selectedChat ? (
-                  <div className="flex-1 flex items-center justify-center text-gray-500">
-                    <p>Selecciona una conversación para comenzar</p>
-                  </div>
-                ) : (
-                  <>
-                    {/* Header del chat */}
-                    <div className="bg-white border-b border-gray-200 p-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center">
-                          {selectedChat.tecnico?.user?.avatarUrl ? (
-                            <img
-                              src={selectedChat.tecnico.user.avatarUrl}
-                              alt={`${selectedChat.tecnico.nombres} ${selectedChat.tecnico.apellidos}`}
-                              className="w-full h-full rounded-full object-cover"
-                            />
-                          ) : (
-                            <span className="text-white font-bold text-sm">
-                              {selectedChat.tecnico?.nombres?.[0] || 'T'}{selectedChat.tecnico?.apellidos?.[0] || 'C'}
-                            </span>
-                          )}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-gray-900">
-                            {selectedChat.tecnico?.nombres || 'Técnico'} {selectedChat.tecnico?.apellidos || ''}
-                          </p>
-                          <p className="text-sm text-gray-600">{selectedChat.tecnico?.oficio || 'Sin oficio'}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Mensajes */}
-                    <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
-                      {messages.length === 0 ? (
-                        <div className="flex items-center justify-center h-full text-gray-500">
-                          <p>No hay mensajes aún. ¡Envía el primero!</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-4">
-                          {messages.map((msg) => {
-                            const isMine = msg.remitenteId === user?.id
-                            return (
-                              <div key={msg.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
-                                <div className={`max-w-xs lg:max-w-md xl:max-w-lg px-4 py-2 rounded-lg ${
-                                  isMine
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-white text-gray-900 border border-gray-200'
-                                }`}>
-                                  {!isMine && msg.remitente?.nombre && (
-                                    <p className="text-xs font-semibold mb-1 opacity-75">
-                                      {msg.remitente.nombre}
-                                    </p>
-                                  )}
-                                  <p className="break-words">{msg.texto || ''}</p>
-                                  <p className={`text-xs mt-1 ${isMine ? 'text-blue-100' : 'text-gray-500'}`}>
-                                    {new Date(msg.timestamp).toLocaleTimeString('es-PE', {
-                                      hour: '2-digit',
-                                      minute: '2-digit'
-                                    })}
-                                  </p>
-                                </div>
-                              </div>
-                            )
-                          })}
-                          <div ref={messagesEndRef} />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Input de mensaje */}
-                    <div className="bg-white border-t border-gray-200 p-4">
-                      <div className="flex gap-2">
-                        <textarea
-                          value={newMessage}
-                          onChange={(e) => setNewMessage(e.target.value)}
-                          onKeyPress={handleKeyPress}
-                          placeholder="Escribe un mensaje..."
-                          className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none text-gray-900"
-                          rows={1}
-                          disabled={sending}
-                        />
-                        <button
-                          onClick={handleSendMessage}
-                          disabled={!newMessage.trim() || sending}
-                          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                          {sending ? '...' : 'Enviar'}
-                        </button>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
+            <div className={`
+              ${isMobile && !selectedChat ? 'hidden' : 'flex'}
+              w-full md:flex flex-col flex-1`
+            }>
+              <MessageView
+                chat={selectedChat}
+                messages={messages}
+                currentUser={user}
+                newMessage={newMessage}
+                onNewMessageChange={setNewMessage}
+                onSendMessage={handleSendMessage}
+                messagesEndRef={messagesEndRef}
+                isSending={sending}
+                onBack={() => setSelectedChat(null)}
+                isMobile={isMobile}
+              />
             </div>
           </div>
         </main>
       </div>
+      {showNewChatModal && <NewChatModal onClose={() => setShowNewChatModal(false)} onStartChat={handleStartChat} />}
+    </div>
+  )
+}
 
-      {/* Modal Nueva Conversación */}
-      {showNewChatModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] flex flex-col">
-            {/* Header del modal */}
-            <div className="p-6 border-b border-gray-200 flex justify-between items-center">
-              <h2 className="text-2xl font-black text-gray-900">Nueva Conversación</h2>
-              <button
-                onClick={() => {
-                  setShowNewChatModal(false)
-                  setSearchQuery('')
-                  setTecnicos([])
-                }}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
+// This is the default export for the page. It provides the <Suspense> boundary.
+export default function ClienteChatPage() {
+  return (
+    <Suspense fallback={<div className="flex h-screen w-full items-center justify-center bg-slate-50"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>}>
+      <ClienteChatPageContent />
+    </Suspense>
+  )
+}
 
-            {/* Buscador */}
-            <div className="p-6 border-b border-gray-200">
-              <div className="relative">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => handleSearchTecnicos(e.target.value)}
-                  placeholder="Busca un técnico por nombre..."
-                  className="w-full px-4 py-3 pl-12 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                  autoFocus
-                />
-                <svg
-                  className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
+
+// --- Helper Components ---
+
+const ConversationList = ({ conversations, selectedChat, onSelectChat, onNewChat }: any) => (
+  <div className="w-full bg-white border-r border-slate-200 flex flex-col">
+    <div className="p-4 border-b border-slate-200 flex justify-between items-center">
+      <h2 className="text-xl font-bold text-slate-800">Chats</h2>
+      <button onClick={onNewChat} className="p-2 rounded-lg hover:bg-slate-100 transition-colors">
+        <Plus className="w-6 h-6 text-slate-600" />
+      </button>
+    </div>
+    <div className="flex-1 overflow-y-auto">
+      {conversations.length === 0 ? (
+        <div className="p-6 text-center text-slate-500">
+          <MessageSquare className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+          <p className="font-medium mb-1">Sin conversaciones</p>
+          <p className="text-sm">Inicia un chat con un técnico.</p>
+        </div>
+      ) : (
+        <div>
+          {conversations.map((conv: Conversation) => (
+            <button
+              key={conv.id}
+              onClick={() => onSelectChat(conv)}
+              className={`w-full p-4 border-b border-slate-100 transition-colors text-left flex items-center gap-3 ${selectedChat?.id === conv.id ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
+            >
+              <div className="relative w-12 h-12 rounded-full bg-slate-200 flex-shrink-0">
+                {conv.tecnico?.user?.avatarUrl && <Image src={conv.tecnico.user.avatarUrl} alt={conv.tecnico.nombres} fill className="object-cover rounded-full" unoptimized />}
               </div>
-            </div>
-
-            {/* Resultados */}
-            <div className="flex-1 overflow-y-auto p-6">
-              {searchingTecnicos ? (
-                <div className="flex justify-center items-center py-12">
-                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
-                </div>
-              ) : searchQuery.trim().length < 2 ? (
-                <div className="text-center py-12 text-gray-500">
-                  <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                  <p>Escribe al menos 2 caracteres para buscar</p>
-                </div>
-              ) : tecnicos.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">
-                  <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-                  </svg>
-                  <p>No se encontraron técnicos</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {tecnicos.map((tecnico) => (
-                    <button
-                      key={tecnico.id}
-                      onClick={() => handleStartChat(tecnico)}
-                      disabled={creatingChat}
-                      className="w-full p-4 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors text-left flex items-center gap-4 disabled:opacity-50"
-                    >
-                      <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center flex-shrink-0">
-                        {tecnico.user.avatarUrl ? (
-                          <img
-                            src={tecnico.user.avatarUrl}
-                            alt={`${tecnico.nombres} ${tecnico.apellidos}`}
-                            className="w-full h-full rounded-full object-cover"
-                          />
-                        ) : (
-                          <span className="text-white font-bold text-lg">
-                            {tecnico.nombres[0]}{tecnico.apellidos[0]}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-semibold text-gray-900">
-                          {tecnico.nombres} {tecnico.apellidos}
-                        </p>
-                        <p className="text-sm text-gray-600">{tecnico.oficio}</p>
-                      </div>
-                      <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-slate-800 truncate">{conv.tecnico?.nombres || 'Técnico'} {conv.tecnico?.apellidos || ''}</p>
+                <p className="text-sm text-slate-500 truncate">{conv.ultimoMensaje || 'Sin mensajes...'}</p>
+              </div>
+            </button>
+          ))}
         </div>
       )}
+    </div>
+  </div>
+)
+
+const MessageView = ({ chat, messages, currentUser, newMessage, onNewMessageChange, onSendMessage, messagesEndRef, isSending, onBack, isMobile }: any) => {
+  if (!chat) {
+    return (
+      <div className="flex-1 hidden md:flex items-center justify-center text-slate-500 bg-white">
+        <div className="text-center">
+          <MessageSquare className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+          <p>Selecciona una conversación para empezar a chatear.</p>
+        </div>
+      </div>
+    )
+  }
+  return (
+    <div className="flex-1 flex flex-col bg-white">
+      <div className="bg-white border-b border-slate-200 p-4 flex items-center gap-3">
+        {isMobile && (
+          <button onClick={onBack} className="p-2 -ml-2 mr-2 rounded-full hover:bg-slate-100">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+          </button>
+        )}
+        <div className="relative w-10 h-10 rounded-full bg-slate-200 flex-shrink-0">
+          {chat.tecnico?.user?.avatarUrl && <Image src={chat.tecnico.user.avatarUrl} alt={chat.tecnico.nombres} fill className="object-cover rounded-full" unoptimized />}
+        </div>
+        <div>
+          <p className="font-semibold text-slate-800">{chat.tecnico?.nombres || 'Técnico'} {chat.tecnico?.apellidos || ''}</p>
+          <p className="text-sm text-slate-500">{chat.tecnico?.oficio || 'Sin oficio'}</p>
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="space-y-4">
+          {messages.map((msg: Message) => {
+            const isMine = msg.remitenteId === currentUser?.id
+            return (
+              <div key={msg.id} className={`flex items-end gap-2 ${isMine ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-md px-4 py-2.5 rounded-2xl ${isMine ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white text-slate-800 border border-slate-200 rounded-bl-none'}`}>
+                  <p className="break-words">{msg.texto || ''}</p>
+                </div>
+              </div>
+            )
+          })}
+          <div ref={messagesEndRef} />
+        </div>
+      </div>
+      <div className="bg-white border-t border-slate-200 p-4">
+        <div className="flex items-center gap-2">
+          <textarea
+            value={newMessage}
+            onChange={(e) => onNewMessageChange(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), onSendMessage())}
+            placeholder="Escribe un mensaje..."
+            className="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none text-slate-900"
+            rows={1}
+            disabled={isSending}
+          />
+          <button onClick={onSendMessage} disabled={!newMessage.trim() || isSending} className="p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+            <Send className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const NewChatModal = ({ onClose, onStartChat }: any) => {
+  const [searchQuery, setSearchQuery] = useState('')
+  const [allUsers, setAllUsers] = useState<any[]>([])
+  const [searchedTecnicos, setSearchedTecnicos] = useState<Tecnico[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(true)
+  const observer = useRef<IntersectionObserver | null>(null)
+  const isSearching = searchQuery.trim().length > 0
+
+  const lastUserElementRef = useCallback((node: any) => {
+    if (isLoading) return
+    if (observer.current) observer.current.disconnect()
+    observer.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMore && !isSearching) {
+        setPage(prevPage => prevPage + 1)
+      }
+    })
+    if (node) observer.current.observe(node)
+  }, [isLoading, hasMore, isSearching])
+
+  // Effect for paginated fetching of all users
+  useEffect(() => {
+    if (isSearching) return;
+    
+    const fetchUsers = async () => {
+      if (!hasMore) return;
+      setIsLoading(true)
+      try {
+        const token = getAccessToken()
+        const response = await fetch(`${API_URL}/api/users?page=${page}&limit=15`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+        const data = await response.json()
+        if (data.success) {
+          setAllUsers(prev => {
+            const existingUserIds = new Set(prev.map(u => u.id));
+            const newUsers = data.data.users.filter((u: any) => !existingUserIds.has(u.id));
+            return [...prev, ...newUsers];
+          });
+          setHasMore(data.data.currentPage < data.data.totalPages)
+        } else {
+          setHasMore(false)
+        }
+      } catch (error) {
+        console.error("Error fetching users", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchUsers()
+  }, [page, isSearching, hasMore])
+
+  // Effect for searching technicians
+  useEffect(() => {
+    if (!isSearching) {
+      setSearchedTecnicos([])
+      return
+    }
+
+    const search = async () => {
+      setIsLoading(true)
+      try {
+        const response = await fetch(`${API_URL}/api/tecnicos?q=${searchQuery}&disponible=true&limit=20`)
+        const data = await response.json()
+        if (data.success) {
+          setSearchedTecnicos(data.data.data || data.data || [])
+        } else { setSearchedTecnicos([]) }
+      } catch (error) { setSearchedTecnicos([]) }
+      finally { setIsLoading(false) }
+    }
+    const timer = setTimeout(search, 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery, isSearching])
+
+  const usersToShow = isSearching ? searchedTecnicos : allUsers;
+
+  return (
+    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[70vh] flex flex-col">
+        <div className="p-5 border-b border-slate-200 flex justify-between items-center">
+          <h2 className="text-xl font-bold text-slate-800">Iniciar una Conversación</h2>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100 transition-colors"><X className="w-5 h-5 text-slate-600" /></button>
+        </div>
+        <div className="p-5 border-b border-slate-200">
+          <div className="relative">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+            <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Buscar por nombre o especialidad..." className="w-full pl-11 pr-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autoFocus />
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto p-2">
+          {usersToShow.length > 0 && (
+            <div className="space-y-1">
+              {usersToShow.map((user, index) => {
+                const isLastElement = usersToShow.length === index + 1 && !isSearching
+                const tecnico = isSearching ? user : null
+                const finalUser = isSearching ? { ...tecnico, nombre: `${tecnico.nombres} ${tecnico.apellidos}` } : user
+
+                return (
+                  <button
+                    ref={isLastElement ? lastUserElementRef : null}
+                    key={finalUser.id}
+                    onClick={() => onStartChat(finalUser)}
+                    className="w-full p-3 hover:bg-slate-100 rounded-lg text-left flex items-center gap-3"
+                  >
+                    <div className="relative w-12 h-12 rounded-full bg-slate-200 flex-shrink-0">
+                      {(finalUser.avatarUrl || tecnico?.user?.avatarUrl) && <Image src={finalUser.avatarUrl || tecnico?.user?.avatarUrl} alt={finalUser.nombre} fill className="object-cover rounded-full" unoptimized />}
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-slate-800">{finalUser.nombre}</p>
+                      <p className="text-sm text-slate-500">{finalUser.rol === 'TECNICO' ? (finalUser.oficio || tecnico?.oficio) : 'Cliente'}</p>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+          {isLoading && <Loader2 className="mx-auto my-4 w-8 h-8 text-blue-600 animate-spin" />}
+          {!isLoading && usersToShow.length === 0 && (
+            <p className="text-center text-slate-500 py-10">
+              {isSearching ? 'No se encontraron técnicos.' : 'No hay más usuarios.'}
+            </p>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

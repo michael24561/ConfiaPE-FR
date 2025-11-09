@@ -87,7 +87,7 @@ export default function RegistroPage() {
 
         console.log('Cliente registrado exitosamente:', res)
         saveSession(res.data.user, res.data.tokens.accessToken, res.data.tokens.refreshToken)
-        router.push('/')
+        router.push('/cliente')
       } else {
         // Validar campos requeridos para técnico
         if (!dni || dni.trim().length < 8) {

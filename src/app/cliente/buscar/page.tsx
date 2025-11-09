@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import HeaderCliente from '@/components/clientecomponents/HeaderCliente'
 import ClienteSidebar from '@/components/clientecomponents/ClienteSidebar'
 import { getStoredUser, getAccessToken } from '@/lib/auth'
 import TecnicoCard from '@/components/TecnicoCard'
+import { Search, X, ChevronDown, SlidersHorizontal } from 'lucide-react'
 
-// ✅ CORREGIDO: Eliminado el guión bajo al final
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
 interface Tecnico {
@@ -31,25 +31,37 @@ interface Tecnico {
 
 export default function ClienteBuscarPage() {
   const [user, setUser] = useState<any>(null)
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
   const [tecnicos, setTecnicos] = useState<Tecnico[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState('todos')
+  const [filters, setFilters] = useState({
+    category: 'todos',
+    sortBy: 'rating_desc',
+    showAvailable: true,
+    showVerified: false,
+  })
   const [isMobile, setIsMobile] = useState(false)
   const router = useRouter()
 
-  const categories = [
-    { value: 'todos', label: 'Todos' },
-    { value: 'Electricista', label: 'Electricista' },
-    { value: 'Fontanero', label: 'Fontanero' },
-    { value: 'Carpintero', label: 'Carpintero' },
-    { value: 'Cerrajero', label: 'Cerrajero' },
-    { value: 'Pintor', label: 'Pintor' },
-    { value: 'HVAC', label: 'HVAC' }
-  ]
+  const categories = useMemo(() => [
+    { value: 'todos', label: 'Todas las categorías' },
+    { value: 'Electricista', label: 'Electricistas' },
+    { value: 'Plomero', label: 'Plomeros' },
+    { value: 'Carpintero', label: 'Carpinteros' },
+    { value: 'Pintor', label: 'Pintores' },
+    { value: 'Gasfitero', label: 'Gasfiteros' },
+    { value: 'HVAC', label: 'Aire Acondicionado (HVAC)' },
+    { value: 'Cerrajero', label: 'Cerrajeros' },
+  ], [])
 
-  // Detectar móvil
+  const sortOptions = useMemo(() => [
+    { value: 'rating_desc', label: 'Mejor calificados' },
+    { value: 'price_asc', label: 'Precio: más bajo a más alto' },
+    { value: 'price_desc', label: 'Precio: más alto a más bajo' },
+    { value: 'name_asc', label: 'Nombre (A-Z)' },
+  ], [])
+
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 1024)
     checkMobile()
@@ -57,7 +69,6 @@ export default function ClienteBuscarPage() {
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
 
-  // Verificar autenticación
   useEffect(() => {
     const storedUser = getStoredUser()
     if (!storedUser || storedUser.rol !== 'CLIENTE') {
@@ -67,90 +78,77 @@ export default function ClienteBuscarPage() {
     setUser(storedUser)
   }, [router])
 
-  // Buscar técnicos
   useEffect(() => {
     const fetchTecnicos = async () => {
-      console.log(`[Busqueda Tec] State: Q='${searchQuery}', Categoria='${selectedCategory}'`)
-
+      setLoading(true)
       try {
-        setLoading(true)
         const params = new URLSearchParams()
-        if (selectedCategory !== 'todos') {
-          params.append('categoria', selectedCategory)
-        }
-        if (searchQuery) {
-          params.append('q', searchQuery)
-        }
-        params.append('disponible', 'true')
+        if (filters.category !== 'todos') params.append('oficio', filters.category)
+        if (searchQuery) params.append('q', searchQuery)
+        if (filters.showAvailable) params.append('disponible', 'true')
+        if (filters.showVerified) params.append('verificado', 'true')
+        
+        // Note: Sorting is applied client-side for now as backend doesn't support it yet.
+        // params.append('sortBy', filters.sortBy)
 
         const requestUrl = `${API_URL}/api/tecnicos?${params.toString()}`
-        console.log(`[Busqueda Tec] Llamando a URL: ${requestUrl}`)
-
-        // Obtener token para incluir información de favoritos
         const token = getAccessToken()
-        const headers: HeadersInit = {
-          'Content-Type': 'application/json'
-        }
-        if (token) {
-          headers['Authorization'] = `Bearer ${token}`
-        }
+        const headers: HeadersInit = { 'Content-Type': 'application/json' }
+        if (token) headers['Authorization'] = `Bearer ${token}`
 
         const response = await fetch(requestUrl, { headers })
+        if (!response.ok) throw new Error('Error fetching technicians')
         
-        console.log(`[Busqueda Tec] Código de estado de respuesta: ${response.status}`)
-        
-        if (!response.ok) {
-          console.error(`[Busqueda Tec] Error en la respuesta HTTP: ${response.statusText}`)
-          setTecnicos([])
-          return
-        }
-
         const data = await response.json()
-        console.log('[Busqueda Tec] Respuesta del backend:', data)
-        
         if (data.success) {
-          // El backend puede devolver data.data.data (con paginación) o data.data (directo)
-          let tecnicosData = data.data
-          if (tecnicosData && tecnicosData.data && Array.isArray(tecnicosData.data)) {
-            tecnicosData = tecnicosData.data
-          } else if (!Array.isArray(tecnicosData)) {
-            tecnicosData = []
-          }
-          
-          console.log(`[Busqueda Tec] Éxito. Técnicos encontrados: ${tecnicosData.length}`)
+          let tecnicosData = data.data.data || data.data || []
           setTecnicos(tecnicosData)
         } else {
-          console.error('[Busqueda Tec] La respuesta indica fallo (success: false)', data.error)
           setTecnicos([])
         }
       } catch (error) {
-        console.error('[Busqueda Tec] Error al cargar técnicos (NetworkError/ParsingError):', error)
+        console.error('Error loading technicians:', error)
         setTecnicos([])
       } finally {
         setLoading(false)
       }
     }
 
-    const timer = setTimeout(() => {
-      fetchTecnicos()
-    }, 300)
-
+    const timer = setTimeout(fetchTecnicos, 300)
     return () => clearTimeout(timer)
-  }, [searchQuery, selectedCategory])
+  }, [searchQuery, filters])
+
+  const sortedTecnicos = useMemo(() => {
+    return [...tecnicos].sort((a, b) => {
+      switch (filters.sortBy) {
+        case 'rating_desc':
+          return b.calificacionPromedio - a.calificacionPromedio
+        case 'price_asc':
+          return a.precioMin - b.precioMin
+        case 'price_desc':
+          return b.precioMax - a.precioMax
+        case 'name_asc':
+          return `${a.nombres} ${a.apellidos}`.localeCompare(`${b.nombres} ${b.apellidos}`)
+        default:
+          return 0
+      }
+    })
+  }, [tecnicos, filters.sortBy])
+
+  const handleFilterChange = (key: keyof typeof filters, value: any) => {
+    setFilters(prev => ({ ...prev, [key]: value }))
+  }
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Cargando...</p>
-        </div>
+      <div className="flex h-screen w-full items-center justify-center bg-slate-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
+    <div className="min-h-screen bg-slate-50 text-slate-800">
       <HeaderCliente
         onMenuClick={() => setSidebarOpen(!sidebarOpen)}
         onNotificationClick={() => {}}
@@ -162,96 +160,108 @@ export default function ClienteBuscarPage() {
         <ClienteSidebar
           isOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
+          onToggle={() => setSidebarOpen(!sidebarOpen)}
         />
 
-        {sidebarOpen && isMobile && (
-          <div
-            className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
-
-        <main className="flex-1 pt-20 lg:ml-72 transition-all duration-300">
-          <div className="px-4 sm:px-8 py-6 max-w-7xl mx-auto">
-            {/* Header */}
-            <div className="mb-8">
-              <h1 className="text-3xl sm:text-4xl font-black text-gray-900 mb-2">
+        <main className={`flex-1 pt-20 transition-all duration-300 ${sidebarOpen ? 'lg:ml-72' : 'lg:ml-0'}`}>
+          <div className="px-4 sm:px-8 py-8 max-w-7xl mx-auto">
+            <div className="mb-10">
+              <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-2">
                 Buscar Técnicos
               </h1>
-              <p className="text-gray-600 text-lg">
-                Encuentra profesionales verificados cerca de ti
+              <p className="text-slate-500 text-lg">
+                Encuentra profesionales verificados para tu próximo proyecto.
               </p>
             </div>
 
-            {/* Filtros */}
-            <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 mb-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Búsqueda */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Buscar por nombre
+            <div className="bg-white rounded-2xl shadow-sm p-6 border border-slate-200/60 mb-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                <div className="lg:col-span-2">
+                  <label htmlFor="search" className="block text-sm font-semibold text-slate-700 mb-2">
+                    Buscar por nombre o palabra clave
                   </label>
                   <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                     <input
+                      id="search"
                       type="text"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Ej: Carlos, José..."
-                      className="w-full px-4 py-3 pl-10 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                      placeholder="Ej: Carlos, electricista, pintura..."
+                      className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900"
                     />
-                    <svg
-                      className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
                   </div>
                 </div>
-
-                {/* Categoría */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label htmlFor="category" className="block text-sm font-semibold text-slate-700 mb-2">
                     Categoría
                   </label>
                   <select
-                    value={selectedCategory}
-                    onChange={(e) => setSelectedCategory(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                    id="category"
+                    value={filters.category}
+                    onChange={(e) => handleFilterChange('category', e.target.value)}
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900"
                   >
                     {categories.map((cat) => (
-                      <option key={cat.value} value={cat.value}>
-                        {cat.label}
-                      </option>
+                      <option key={cat.value} value={cat.value}>{cat.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="sortBy" className="block text-sm font-semibold text-slate-700 mb-2">
+                    Ordenar por
+                  </label>
+                  <select
+                    id="sortBy"
+                    value={filters.sortBy}
+                    onChange={(e) => handleFilterChange('sortBy', e.target.value)}
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900"
+                  >
+                    {sortOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
                     ))}
                   </select>
                 </div>
               </div>
+              <div className="flex items-center gap-6 mt-4 pt-4 border-t border-slate-200/80">
+                  <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={filters.showAvailable}
+                      onChange={(e) => handleFilterChange('showAvailable', e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    Mostrar solo disponibles
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={filters.showVerified}
+                      onChange={(e) => handleFilterChange('showVerified', e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    Solo verificados
+                  </label>
+              </div>
             </div>
 
-            {/* Resultados */}
             {loading ? (
-              <div className="flex justify-center items-center py-12">
+              <div className="flex justify-center items-center py-20">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
               </div>
-            ) : tecnicos.length === 0 ? (
-              <div className="bg-white rounded-2xl shadow-lg p-12 border border-gray-100 text-center">
-                <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <p className="text-gray-600 font-medium mb-2">No se encontraron técnicos</p>
-                <p className="text-sm text-gray-500">Intenta cambiar los filtros de búsqueda</p>
+            ) : sortedTecnicos.length === 0 ? (
+              <div className="bg-white rounded-2xl shadow-sm p-12 border border-slate-200/60 text-center">
+                <Search className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                <h3 className="text-xl font-semibold text-slate-800 mb-2">No se encontraron técnicos</h3>
+                <p className="text-slate-500">Intenta ajustar los filtros o ampliar tu búsqueda.</p>
               </div>
             ) : (
               <>
-                <div className="mb-4">
-                  <p className="text-gray-600">
-                    <span className="font-bold text-gray-900">{tecnicos.length}</span> técnicos encontrados
-                  </p>
+                <div className="mb-4 text-sm text-slate-600">
+                  Mostrando <span className="font-semibold text-slate-800">{sortedTecnicos.length}</span> de {tecnicos.length} técnicos.
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {tecnicos.map((tecnico) => (
+                  {sortedTecnicos.map((tecnico) => (
                     <TecnicoCard
                       key={tecnico.id}
                       tecnico={{

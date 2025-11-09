@@ -46,15 +46,16 @@ export default function HeaderCliente({
   }
 
   return (
-    <header className="fixed top-0 left-0 right-0 h-16 bg-white border-b border-gray-200 z-50">
-      <div className="h-full px-4 sm:px-6 lg:px-8 flex items-center justify-between">
+    <header className="fixed top-0 left-0 right-0 bg-white/80 backdrop-blur-sm z-30 border-b border-slate-200/80">
+      <div className="h-20 px-4 sm:px-6 lg:px-8 flex items-center justify-between">
         {/* Left side */}
-        <div className="flex items-center">
-          <div className="flex items-center">
+        <div className="flex items-center gap-4">
+         
+          <div className="hidden sm:flex items-center">
             <img
               src="/images/ConfiaPE.png"
               alt="ConfiaPE"
-              className="h-20 w-auto object-contain"
+              className="h-12 w-auto object-contain"
             />
           </div>
         </div>

@@ -132,6 +132,14 @@ export const disconnectSocket = () => {
 
 export const getSocket = () => socket
 
+export const emitEvent = (eventName: string, data: any) => {
+  if (socket?.connected) {
+    socket.emit(eventName, data);
+  } else {
+    console.warn(`⚠️ Socket no conectado. No se pudo emitir el evento '${eventName}'`);
+  }
+};
+
 export const isSocketConnected = () => socket?.connected || false
 
 export const joinChat = (chatId: string) => {

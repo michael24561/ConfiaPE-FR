@@ -2,31 +2,21 @@
 
 import { useState } from 'react'
 import { getAccessToken } from '@/lib/auth'
+import { emitEvent } from '@/lib/socket' // Import socket emitter
+import { X, Send, Loader2 } from 'lucide-react'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
 interface Props {
   isOpen: boolean
   onClose: () => void
-  tecnico: {
-    id: string
-    nombre: string
-    oficio: string
-  }
+  tecnico: { id: string; nombre: string; oficio: string }
   onSuccess: () => void
-}
-
-interface FormErrors {
-    descripcion?: string;
-    direccion?: string;
-    telefono?: string;
-    fechaProgramada?: string;
-    general?: string;
 }
 
 export default function SolicitarServicioModal({ isOpen, onClose, tecnico, onSuccess }: Props) {
   const [loading, setLoading] = useState(false)
-  const [validationErrors, setValidationErrors] = useState<FormErrors>({})
+  const [errors, setErrors] = useState<Record<string, string>>({})
   const [formData, setFormData] = useState({
     servicioNombre: tecnico.oficio,
     descripcion: '',
@@ -35,101 +25,56 @@ export default function SolicitarServicioModal({ isOpen, onClose, tecnico, onSuc
     fechaProgramada: ''
   })
 
-  // Nuevas validaciones del lado del cliente
-  const validateForm = (): boolean => {
-    const errors: FormErrors = {};
-    let isValid = true;
-
-    // 1. Validar Descripcion (asumiendo min 10 caracteres)
-    if (formData.descripcion.length < 10) {
-      errors.descripcion = 'La descripción debe tener al menos 10 caracteres.';
-      isValid = false;
-    }
-
-    // 2. Validar Dirección (asumiendo min 5 caracteres)
-    if (formData.direccion.length < 5) {
-      errors.direccion = 'La dirección debe tener al menos 5 caracteres.';
-      isValid = false;
-    }
-
-    // 3. Validar Teléfono (usando el formato estricto que requiere el backend)
-    // Asumiendo que el formato "+51XXXXXXXXX" (12 caracteres en total) es obligatorio
-    const phoneRegex = /^\+\d{11}$/; 
-    if (!phoneRegex.test(formData.telefono)) {
-      errors.telefono = 'El formato requerido es +51XXXXXXXXX (ej: +51999888777).';
-      isValid = false;
-    }
-
-    // 4. Validar Fecha Programada (si se ingresó, debe ser una fecha válida)
-    if (formData.fechaProgramada && isNaN(new Date(formData.fechaProgramada).getTime())) {
-      errors.fechaProgramada = 'La fecha y hora seleccionada no es válida.';
-      isValid = false;
-    }
-
-    setValidationErrors(errors);
-    return isValid;
+  const validate = () => {
+    const newErrors: Record<string, string> = {}
+    if (formData.descripcion.length < 10) newErrors.descripcion = 'La descripción es muy corta (mín. 10 caracteres).'
+    if (formData.direccion.length < 5) newErrors.direccion = 'La dirección es muy corta (mín. 5 caracteres).'
+    if (!/^\+51\d{9}$/.test(formData.telefono)) newErrors.telefono = 'El formato debe ser +51999888777.'
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
   }
 
- // SolicitarServicioModal.tsx (Dentro de handleSubmit)
-
-const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setValidationErrors({}); // Limpiar errores anteriores
-
-    if (!validateForm()) {
-        console.log('[Trabajos] Validación de frontend fallida.');
-        return; // Detener si la validación del cliente falla
-    }
+    if (!validate()) return
     
     setLoading(true)
-
     try {
       const token = getAccessToken()
-      const requestUrl = `${API_URL}/api/trabajos`;
-
-      // 1. Crear el payload base
-      const payload: any = {
-        // Usamos los nombres de campo que se están enviando actualmente (servicioNombre, tecnicoId, etc.)
-        servicioNombre: formData.servicioNombre, 
-        descripcion: formData.descripcion,
-        direccion: formData.direccion,
-        telefono: formData.telefono,
-        tecnicoId: tecnico.id,
-      };
-
-      // 2. CORRECCIÓN DE FECHA: Si existe la fecha, transformarla a formato ISO completo (UTC)
-      if (formData.fechaProgramada) {
-          // Crear un objeto Date a partir de la cadena 'YYYY-MM-DDThh:mm'
-          const date = new Date(formData.fechaProgramada);
-          
-          // Verificar validez (si no se validó en el frontend)
-          if (!isNaN(date.getTime())) {
-              // Convertir a formato ISO 8601 (termina en 'Z'), que Zod acepta
-              payload.fechaProgramada = date.toISOString(); 
-          } else {
-              // Si por alguna razón la fecha es inválida, se omite para no causar 400
-              console.warn('[Trabajos] Fecha programada es inválida y será omitida.');
-          }
+      const payload = { ...formData, tecnicoId: tecnico.id }
+      if (payload.fechaProgramada) {
+        payload.fechaProgramada = new Date(payload.fechaProgramada).toISOString()
       }
-      // NOTA: El campo 'precio' sigue sin enviarse, lo cual resuelve el error anterior.
-      
-      console.log('[Trabajos] Payload a enviar:', JSON.stringify(payload, null, 2));
 
-      const response = await fetch(requestUrl, {
+      const response = await fetch(`${API_URL}/api/trabajos`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(payload)
       })
 
-      // ... (El resto del manejo de la respuesta sigue igual)
-      // ...
-      
+      const result = await response.json()
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Error al crear la solicitud.')
+      }
+
+      // --- Real-time Notification ---
+      // The backend returns the full 'trabajo' object.
+      const newTrabajo = result.data 
+      if (newTrabajo && newTrabajo.tecnico.userId) {
+        emitEvent('cliente:solicitud_creada', {
+          tecnicoUserId: newTrabajo.tecnico.userId,
+          trabajo: newTrabajo,
+        })
+      }
+      // --- End Real-time ---
+
+      alert('Solicitud enviada exitosamente!')
+      onSuccess()
+      onClose()
+
     } catch (error) {
-      console.error('[Trabajos] Error al enviar solicitud (NetworkError):', error)
-      alert('❌ Error al enviar solicitud')
+      console.error('Error al enviar solicitud:', error)
+      setErrors({ general: error instanceof Error ? error.message : 'Ocurrió un error inesperado.' })
     } finally {
       setLoading(false)
     }
@@ -138,142 +83,34 @@ const handleSubmit = async (e: React.FormEvent) => {
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl max-w-2xl w-full p-8 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-3xl font-bold text-gray-900">Solicitar Servicio</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+        <div className="p-6 border-b border-slate-200 flex justify-between items-center">
+          <h2 className="text-2xl font-bold text-slate-800">Solicitar Servicio</h2>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100 transition-colors"><X className="w-5 h-5 text-slate-600" /></button>
         </div>
-
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-4 mb-6 border border-blue-100">
-          <p className="text-gray-700">
-            Solicitar servicio a: <strong className="text-blue-600">{tecnico.nombre}</strong>
-          </p>
-          <p className="text-sm text-gray-600 mt-1">
-            El técnico recibirá una notificación y podrá aceptar tu solicitud
-          </p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Tipo de Servicio
-            </label>
-            <input
-              type="text"
-              value={formData.servicioNombre}
-              onChange={(e) => setFormData({ ...formData, servicioNombre: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-              required
-              placeholder="Ej: Reparación eléctrica"
-            />
+        
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
+          <div className="bg-slate-50 rounded-xl p-4">
+            <p className="text-sm text-slate-600">Estás solicitando un servicio a:</p>
+            <p className="font-bold text-blue-600">{tecnico.nombre} ({tecnico.oficio})</p>
           </div>
 
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Descripción del Problema *
-            </label>
-            <textarea
-              value={formData.descripcion}
-              onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
-              onBlur={validateForm} // Validar al salir del campo
-              className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 ${validationErrors.descripcion ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'} text-gray-900`}
-              rows={4}
-              required
-              placeholder="Describe detalladamente el problema que necesitas solucionar..."
-            />
-            {validationErrors.descripcion && (
-                <p className="text-sm text-red-500 mt-1">{validationErrors.descripcion}</p>
-            )}
-            <p className="text-xs text-gray-500 mt-1">
-              Mientras más detalles proporciones, mejor será la atención (Mínimo 10 caracteres)
-            </p>
-          </div>
+          {errors.general && <p className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">{errors.general}</p>}
 
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Dirección del Servicio *
-            </label>
-            <input
-              type="text"
-              value={formData.direccion}
-              onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
-              onBlur={validateForm} // Validar al salir del campo
-              className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 ${validationErrors.direccion ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'} text-gray-900`}
-              required
-              placeholder="Ej: Av. Principal 123, Lima (Mínimo 5 caracteres)"
-            />
-            {validationErrors.direccion && (
-                <p className="text-sm text-red-500 mt-1">{validationErrors.direccion}</p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Teléfono de Contacto *
-            </label>
-            <input
-              type="tel"
-              value={formData.telefono}
-              onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
-              onBlur={validateForm} // Validar al salir del campo
-              className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 ${validationErrors.telefono ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'} text-gray-900`}
-              required
-              placeholder="Formato: +51XXXXXXXXX"
-            />
-            {validationErrors.telefono && (
-                <p className="text-sm text-red-500 mt-1">{validationErrors.telefono}</p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Fecha y Hora Preferida (Opcional)
-            </label>
-            <input
-              type="datetime-local"
-              value={formData.fechaProgramada}
-              onChange={(e) => setFormData({ ...formData, fechaProgramada: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-              min={new Date().toISOString().slice(0, 16)}
-            />
-            {validationErrors.fechaProgramada && (
-                <p className="text-sm text-red-500 mt-1">{validationErrors.fechaProgramada}</p>
-            )}
-          </div>
+          <InputField label="Tipo de Servicio" value={formData.servicioNombre} onChange={val => setFormData(p => ({ ...p, servicioNombre: val }))} error={errors.servicioNombre} required />
+          <InputField label="Descripción del Problema" type="textarea" value={formData.descripcion} onChange={val => setFormData(p => ({ ...p, descripcion: val }))} error={errors.descripcion} required placeholder="Describe el problema detalladamente..." />
+          <InputField label="Dirección del Servicio" value={formData.direccion} onChange={val => setFormData(p => ({ ...p, direccion: val }))} error={errors.direccion} required placeholder="Ej: Av. Principal 123, Miraflores" />
+          <InputField label="Teléfono de Contacto" value={formData.telefono} onChange={val => setFormData(p => ({ ...p, telefono: val }))} error={errors.telefono} required placeholder="+51999888777" />
+          <InputField label="Fecha y Hora Preferida (Opcional)" type="datetime-local" value={formData.fechaProgramada} onChange={val => setFormData(p => ({ ...p, fechaProgramada: val }))} error={errors.fechaProgramada} />
 
           <div className="flex gap-4 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-colors"
-              disabled={loading}
-            >
+            <button type="button" onClick={onClose} className="flex-1 px-6 py-3 border-2 border-slate-300 text-slate-700 rounded-xl font-semibold hover:bg-slate-50 transition-colors" disabled={loading}>
               Cancelar
             </button>
-            <button
-              type="submit"
-              disabled={loading || Object.keys(validationErrors).length > 0}
-              className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Enviando...
-                </span>
-              ) : (
-                'Enviar Solicitud'
-              )}
+            <button type="submit" disabled={loading} className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+              {loading ? 'Enviando...' : 'Enviar Solicitud'}
             </button>
           </div>
         </form>
@@ -281,3 +118,30 @@ const handleSubmit = async (e: React.FormEvent) => {
     </div>
   )
 }
+
+const InputField = ({ label, value, onChange, error, type = 'text', required = false, placeholder = '' }: any) => (
+    <div>
+        <label className="block text-sm font-semibold text-slate-700 mb-1.5">{label}</label>
+        {type === 'textarea' ? (
+            <textarea
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 ${error ? 'border-red-500 focus:ring-red-500' : 'border-slate-300 focus:ring-blue-500'} text-slate-900`}
+                rows={3}
+                required={required}
+                placeholder={placeholder}
+            />
+        ) : (
+            <input
+                type={type}
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 ${error ? 'border-red-500 focus:ring-red-500' : 'border-slate-300 focus:ring-blue-500'} text-slate-900`}
+                required={required}
+                placeholder={placeholder}
+                min={type === 'datetime-local' ? new Date().toISOString().slice(0, 16) : undefined}
+            />
+        )}
+        {error && <p className="text-sm text-red-600 mt-1">{error}</p>}
+    </div>
+)

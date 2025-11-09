@@ -2,106 +2,126 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
+import { Star, ShieldCheck, Briefcase, MapPin, Heart } from 'lucide-react'
+import { getAccessToken } from '@/lib/auth'
+import { useState } from 'react'
 
-// Interfaz flexible que soporta ambos formatos
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
+
 interface TecnicoCardProps {
   tecnico: {
     id: string
+    nombre: string
     oficio: string | null
+    descripcion?: string | null
     calificacionPromedio: number
-    precioPorHora?: number | null
+    trabajosCompletados?: number
     precioMin?: number | null
     precioMax?: number | null
-    trabajosCompletados?: number
-    descripcion?: string | null
-    estrellas?: number
-    imagen?: string
-    nombre?: string
-    user?: {
-      nombre?: string
-      apellidos?: string
-      avatarUrl?: string | null
-    }
+    imagen?: string | null
+    verificado?: boolean
+    disponible?: boolean
+    esFavorito?: boolean
+    ubicacion?: string | null
   }
 }
 
 export default function TecnicoCard({ tecnico }: TecnicoCardProps) {
-  // Manejar nombre de forma flexible
-  const nombre = tecnico.nombre ||
-    (tecnico.user ? `${tecnico.user.nombre || ''} ${tecnico.user.apellidos || ''}`.trim() : 'Técnico')
+  const [isFavorite, setIsFavorite] = useState(tecnico.esFavorito || false)
+  const [isProcessingFavorite, setIsProcessingFavorite] = useState(false)
 
-  // Manejar avatar
-  const avatarUrl = tecnico.imagen || tecnico.user?.avatarUrl || null
+  const handleFavoriteToggle = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    
+    if (isProcessingFavorite) return
+    setIsProcessingFavorite(true)
 
-  // Manejar calificación
-  const rating = Number(tecnico.estrellas || tecnico.calificacionPromedio || 0)
+    try {
+      const token = getAccessToken()
+      if (!token) return // Or redirect to login
 
-  // Manejar precio
-  const precio = tecnico.precioPorHora || tecnico.precioMin
+      const response = await fetch(`${API_URL}/api/favoritos`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tecnicoId: tecnico.id }),
+      })
+
+      if (response.ok) {
+        setIsFavorite(!isFavorite)
+      }
+    } catch (error) {
+      console.error('Error toggling favorite:', error)
+    } finally {
+      setIsProcessingFavorite(false)
+    }
+  }
+
+  const rating = Number(tecnico.calificacionPromedio || 0)
 
   return (
-    <Link href={`/Tecnicos/${tecnico.id}`}>
-      <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-shadow p-6 cursor-pointer h-full flex flex-col">
-        <div className="flex items-center gap-4 mb-4">
-          <div className="relative w-16 h-16 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
-            {avatarUrl ? (
-              <Image
-                src={avatarUrl}
-                alt={nombre}
-                fill
-                className="object-cover"
-                unoptimized
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-2xl font-bold text-gray-500">
-                {nombre[0]?.toUpperCase() || 'T'}
+    <Link href={`/cliente/tecnicos/${tecnico.id}`} className="block group">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 h-full flex flex-col overflow-hidden transition-all duration-300 group-hover:shadow-lg group-hover:-translate-y-1 group-hover:border-blue-500/50">
+        <div className={`h-1.5 ${tecnico.disponible ? 'bg-green-500' : 'bg-slate-300'}`}></div>
+        
+        <div className="p-5 flex flex-col flex-grow">
+          <div className="flex items-start gap-4 mb-4">
+            <div className="relative w-16 h-16 rounded-full overflow-hidden bg-slate-200 flex-shrink-0">
+              {tecnico.imagen ? (
+                <Image src={tecnico.imagen} alt={tecnico.nombre} fill className="object-cover" unoptimized />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-2xl font-bold text-slate-500">
+                  {tecnico.nombre[0]?.toUpperCase() || 'T'}
+                </div>
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-lg font-bold text-slate-800 truncate">{tecnico.nombre}</h3>
+              <p className="text-sm text-slate-500">{tecnico.oficio || 'Técnico'}</p>
+              {tecnico.verificado && (
+                <div className="flex items-center gap-1 mt-1 text-xs text-blue-600 font-semibold">
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Verificado</span>
+                </div>
+              )}
+            </div>
+            <button onClick={handleFavoriteToggle} className={`transition-colors duration-200 ${isProcessingFavorite ? 'opacity-50' : ''}`}>
+              <Heart className={`w-6 h-6 ${isFavorite ? 'text-red-500 fill-current' : 'text-slate-400 hover:text-red-500'}`} />
+            </button>
+          </div>
+
+          {tecnico.descripcion && (
+            <p className="text-sm text-slate-600 mb-4 line-clamp-2">{tecnico.descripcion}</p>
+          )}
+
+          <div className="mt-auto space-y-4">
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-1">
+                <Star className="w-4 h-4 text-yellow-400 fill-current" />
+                <span className="font-bold text-slate-700">{rating.toFixed(1)}</span>
+                <span className="text-slate-500">({tecnico.trabajosCompletados || 0})</span>
+              </div>
+              {tecnico.ubicacion && (
+                <div className="flex items-center gap-1 text-slate-500">
+                  <MapPin className="w-4 h-4" />
+                  <span>{tecnico.ubicacion}</span>
+                </div>
+              )}
+            </div>
+            
+            {(tecnico.precioMin && tecnico.precioMin > 0) && (
+              <div className="bg-slate-50 rounded-lg p-3 text-center">
+                <span className="text-sm text-slate-600">Desde </span>
+                <span className="text-lg font-bold text-blue-600">
+                  S/ {Number(tecnico.precioMin).toFixed(0)}+
+                </span>
               </div>
             )}
           </div>
-
-          <div className="flex-1 min-w-0">
-            <h3 className="text-lg font-bold text-gray-900 truncate">{nombre}</h3>
-            <p className="text-sm text-gray-600">{tecnico.oficio || 'Técnico'}</p>
-          </div>
         </div>
-
-        {tecnico.descripcion && (
-          <p className="text-sm text-gray-600 mb-4 line-clamp-2">{tecnico.descripcion}</p>
-        )}
-
-        <div className="mt-auto flex items-center justify-between">
-          <div className="flex items-center gap-1">
-            {[...Array(5)].map((_, i) => (
-              <svg
-                key={i}
-                className={`w-5 h-5 ${
-                  i < Math.floor(rating)
-                    ? 'text-yellow-400'
-                    : 'text-gray-300'
-                }`}
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
-                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-              </svg>
-            ))}
-            <span className="ml-2 text-sm text-gray-600">
-              {rating.toFixed(1)}
-            </span>
-          </div>
-
-          {precio && precio > 0 && (
-            <span className="text-lg font-bold text-blue-600">
-              S/ {Number(precio).toFixed(0)}{tecnico.precioPorHora ? '/h' : '+'}
-            </span>
-          )}
-        </div>
-
-        {tecnico.trabajosCompletados !== undefined && tecnico.trabajosCompletados > 0 && (
-          <div className="mt-2 text-xs text-gray-500">
-            {tecnico.trabajosCompletados} trabajo{tecnico.trabajosCompletados !== 1 ? 's' : ''} completado{tecnico.trabajosCompletados !== 1 ? 's' : ''}
-          </div>
-        )}
       </div>
     </Link>
   )
