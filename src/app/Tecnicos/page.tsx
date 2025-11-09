@@ -6,6 +6,9 @@ import Header from "@/components/Header"
 import Footer from "@/components/Footer"
 import TecnicoCard from "@/components/TecnicoCard"
 
+// ✅ AGREGADO: Variable de entorno para la API
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
+
 interface Tecnico {
   id: string
   nombres: string
@@ -15,8 +18,8 @@ interface Tecnico {
   ubicacion: string
   calificacionPromedio: number
   trabajosCompletados: number
-  precioMin: number | string // ✅ Actualizado para aceptar string también
-  precioMax: number | string // ✅ Actualizado para aceptar string también
+  precioMin: number | string
+  precioMax: number | string
   experienciaAnios: number
   verificado: boolean
   disponible: boolean
@@ -42,7 +45,6 @@ interface TecnicosResponse {
   }
 }
 
-// ✅ Extraemos el contenido principal a un componente secundario
 function TecnicosContent() {
   const searchParams = useSearchParams()
   const searchFromURL = searchParams.get('search') || ""
@@ -83,7 +85,8 @@ function TecnicosContent() {
           params.append('categoria', categoriaActiva)
         }
 
-        const response = await fetch(`http://localhost:5000/api/tecnicos?${params}`, {
+        // ✅ CORREGIDO: Usar variable de entorno
+        const response = await fetch(`${API_URL}/api/tecnicos?${params}`, {
           method: 'GET',
           headers: {
             'Accept': 'application/json',
@@ -150,7 +153,6 @@ function TecnicosContent() {
     return iconos[oficio.toLowerCase()] || '🔧'
   }
 
-  // ✅ Función para convertir precios de string a number
   const parsePrecio = (precio: number | string | undefined): number | null => {
     if (precio === undefined || precio === null) return null
     if (typeof precio === 'number') return precio
@@ -181,7 +183,7 @@ function TecnicosContent() {
 
   const handleCategoriaClick = (categoria: string) => {
     setCategoriaActiva(categoria)
-    setPage(1) // Resetear a página 1 cuando cambia filtro
+    setPage(1)
   }
 
   return (
@@ -292,7 +294,6 @@ function TecnicosContent() {
         {!loading && !error && resultados.length > 0 && (
           <div className={`grid ${vistaGrid ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1'} gap-8 auto-rows-fr`}>
             {resultados.map((t, idx) => {
-              // ✅ Convertir precios para mostrar correctamente
               const precioMinNum = parsePrecio(t.precioMin)
               const tienePrecioMin = precioMinNum !== null
               
@@ -310,7 +311,6 @@ function TecnicosContent() {
                       estrellas: parseFloat(t.calificacionPromedio.toString()) || 0,
                       imagen: t.user.avatarUrl || "/images/olivis.jpg",
                       descripcion: t.descripcion || 'Profesional con experiencia en el rubro',
-                      // ✅ Pasando los nuevos campos
                       precioMin: t.precioMin,
                       precioMax: t.precioMax,
                       experienciaAnios: t.experienciaAnios,
@@ -349,7 +349,6 @@ function TecnicosContent() {
   )
 }
 
-// ✅ Envolvemos el contenido dentro de Suspense
 export default function TecnicosPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex flex-col">
