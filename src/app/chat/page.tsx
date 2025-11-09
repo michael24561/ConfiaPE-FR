@@ -4,9 +4,9 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Header from '@/components/Header'
 import { getStoredUser } from '@/lib/auth'
-import { getAccessToken } from '@/lib/auth'
+import { getConversations, getMessages, sendMessageAPI } from '@/lib/chat'
 
-// ✅ Tipos mejorados
+// ✅ Tipos basados en tu API
 interface User {
   id: string
   nombre: string
@@ -19,30 +19,34 @@ interface Message {
   timestamp: string
   remitenteId: string
   remitente?: User
+  leido: boolean
+}
+
+interface Tecnico {
+  id: string
+  nombres: string
+  apellidos: string
+  oficio: string
+  user: {
+    avatarUrl?: string
+  }
 }
 
 interface Conversation {
   id: string
-  tecnico?: {
-    id: string
-    nombres: string
-    apellidos: string
-    oficio: string
-    user: {
-      avatarUrl?: string
-    }
-  }
+  tecnico?: Tecnico
   ultimoMensaje?: string
   ultimoMensajeAt?: string
+  _count?: {
+    mensajesNoLeidos: number
+  }
 }
 
 interface MessagesResponse {
   messages: Message[]
   total: number
+  hasMore: boolean
 }
-
-// ✅ URL de API
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
 export default function ChatPage() {
   const [user, setUser] = useState<any>(null)
@@ -52,99 +56,9 @@ export default function ChatPage() {
   const [newMessage, setNewMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
-
-  // ✅ Función para obtener conversaciones
-  const getConversations = async (): Promise<Conversation[]> => {
-    try {
-      const token = getAccessToken()
-      if (!token) throw new Error('No token')
-
-      const response = await fetch(`${API_URL}/api/chats/conversations`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
-
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}: ${response.statusText}`)
-      }
-
-      const data = await response.json()
-      console.log('📋 Conversaciones API response:', data)
-      
-      return data.data || data.conversations || []
-    } catch (error) {
-      console.error('Error cargando conversaciones:', error)
-      return []
-    }
-  }
-
-  // ✅ Función para obtener mensajes
-  const getMessages = async (chatId: string): Promise<MessagesResponse> => {
-    try {
-      const token = getAccessToken()
-      if (!token) throw new Error('No token')
-
-      const response = await fetch(`${API_URL}/api/chats/${chatId}/messages`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
-
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}: ${response.statusText}`)
-      }
-
-      const data = await response.json()
-      console.log(`📨 Mensajes para chat ${chatId}:`, data)
-      
-      return {
-        messages: data.data?.messages || data.messages || data.data || [],
-        total: data.data?.total || data.total || 0
-      }
-    } catch (error) {
-      console.error('Error cargando mensajes:', error)
-      return { messages: [], total: 0 }
-    }
-  }
-
-  // ✅ Función para enviar mensaje
-  const sendMessage = async (chatId: string, texto: string): Promise<boolean> => {
-    try {
-      const token = getAccessToken()
-      if (!token) throw new Error('No token')
-
-      const response = await fetch(`${API_URL}/api/chats/${chatId}/messages`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ texto })
-      })
-
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}: ${response.statusText}`)
-      }
-
-      const data = await response.json()
-      console.log('✅ Mensaje enviado:', data)
-      
-      // Agregar el mensaje a la lista localmente
-      if (data.data) {
-        setMessages(prev => [...prev, data.data])
-      }
-      
-      return true
-    } catch (error) {
-      console.error('Error enviando mensaje:', error)
-      return false
-    }
-  }
 
   // ✅ Cargar usuario y conversaciones
   useEffect(() => {
@@ -157,12 +71,14 @@ export default function ChatPage() {
         }
         setUser(storedUser)
 
-        // Cargar conversaciones
+        // Cargar conversaciones usando tu función existente
         const convs = await getConversations()
         console.log('📋 Conversaciones cargadas:', convs)
-        setConversations(convs)
+        setConversations(Array.isArray(convs) ? convs : [])
       } catch (error) {
-        console.error('Error cargando datos:', error)
+        console.error('Error cargando conversaciones:', error)
+        setError('Error al cargar las conversaciones')
+        setConversations([])
       } finally {
         setLoading(false)
       }
@@ -177,11 +93,20 @@ export default function ChatPage() {
 
     const loadMessages = async () => {
       try {
-        const msgs = await getMessages(selectedChat.id)
-        setMessages(msgs.messages || [])
+        setLoading(true)
+        // Usar tu función getMessages existente
+        const messagesData = await getMessages(selectedChat.id)
+        console.log('📨 Mensajes cargados:', messagesData)
+        
+        // Manejar diferentes formatos de respuesta
+        const messagesArray = messagesData.messages || messagesData.data || messagesData || []
+        setMessages(Array.isArray(messagesArray) ? messagesArray : [])
       } catch (error) {
         console.error('Error cargando mensajes:', error)
+        setError('Error al cargar los mensajes')
         setMessages([])
+      } finally {
+        setLoading(false)
       }
     }
 
@@ -199,10 +124,26 @@ export default function ChatPage() {
 
     try {
       setSending(true)
-      const success = await sendMessage(selectedChat.id, newMessage.trim())
-      
-      if (success) {
-        setNewMessage('')
+      setError(null)
+
+      // Usar tu función sendMessageAPI existente
+      const sentMessage = await sendMessageAPI(selectedChat.id, newMessage.trim())
+      console.log('✅ Mensaje enviado:', sentMessage)
+
+      // Agregar el mensaje a la lista localmente
+      if (sentMessage) {
+        const newMsg: Message = {
+          id: sentMessage.id || Date.now().toString(),
+          texto: newMessage.trim(),
+          timestamp: sentMessage.timestamp || new Date().toISOString(),
+          remitenteId: user.id,
+          remitente: {
+            id: user.id,
+            nombre: user.nombre || user.nombres || 'Usuario'
+          },
+          leido: false
+        }
+        setMessages(prev => [...prev, newMsg])
         
         // Actualizar última mensaje en la conversación
         setConversations(prev => prev.map(conv =>
@@ -214,12 +155,12 @@ export default function ChatPage() {
               }
             : conv
         ))
-      } else {
-        alert('No se pudo enviar el mensaje. Verifica tu conexión.')
       }
-    } catch (error) {
+      
+      setNewMessage('')
+    } catch (error: any) {
       console.error('Error enviando mensaje:', error)
-      alert('Error al enviar el mensaje')
+      setError(error.message || 'Error al enviar el mensaje')
     } finally {
       setSending(false)
     }
@@ -232,7 +173,7 @@ export default function ChatPage() {
     }
   }
 
-  // ✅ Helper functions mejoradas
+  // ✅ Helper functions
   const getAvatarUrl = (conv: Conversation): string | null => {
     return conv.tecnico?.user?.avatarUrl || null
   }
@@ -286,7 +227,7 @@ export default function ChatPage() {
     }
   }
 
-  if (loading) {
+  if (loading && conversations.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -301,6 +242,19 @@ export default function ChatPage() {
     <div className="min-h-screen bg-gray-50">
       <Header />
       <div className="pt-20 h-[calc(100vh-80px)] flex flex-col">
+        {/* Error Message */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative mx-4 mt-4">
+            <span className="block sm:inline">{error}</span>
+            <button 
+              onClick={() => setError(null)}
+              className="absolute top-0 bottom-0 right-0 px-4 py-3"
+            >
+              ×
+            </button>
+          </div>
+        )}
+        
         <div className="flex-1 flex overflow-hidden">
           {/* Lista de conversaciones */}
           <div className="w-full md:w-1/3 lg:w-1/4 bg-white border-r border-gray-200 overflow-y-auto">
@@ -347,8 +301,14 @@ export default function ChatPage() {
                               {initials}
                             </span>
                           </div>
-                          {/* Indicador de actividad */}
-                          <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
+                          {/* Indicador de mensajes no leídos */}
+                          {conv._count?.mensajesNoLeidos && conv._count.mensajesNoLeidos > 0 && (
+                            <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center">
+                              <span className="text-white text-xs font-bold">
+                                {conv._count.mensajesNoLeidos}
+                              </span>
+                            </div>
+                          )}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex justify-between items-start mb-1">
@@ -418,15 +378,16 @@ export default function ChatPage() {
                       </p>
                       <p className="text-sm text-gray-600">{getTecnicoOficio(selectedChat)}</p>
                     </div>
-                    <div className="text-xs text-gray-500">
-                      En línea
-                    </div>
                   </div>
                 </div>
 
                 {/* Mensajes */}
                 <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
-                  {messages.length === 0 ? (
+                  {loading ? (
+                    <div className="flex items-center justify-center h-20">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                    </div>
+                  ) : messages.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-gray-500 p-8">
                       <div className="text-6xl mb-4">👋</div>
                       <h3 className="text-lg font-semibold mb-2">Inicia la conversación</h3>
@@ -447,12 +408,13 @@ export default function ChatPage() {
                             } shadow-sm`}>
                               {!isMine && (
                                 <p className="text-xs font-semibold mb-1 opacity-75">
-                                  {msg.remitente?.nombre || 'Técnico'}
+                                  {msg.remitente?.nombre || getTecnicoName(selectedChat)}
                                 </p>
                               )}
                               <p className="break-words text-sm">{msg.texto}</p>
                               <p className={`text-xs mt-1 ${isMine ? 'text-blue-100' : 'text-gray-500'}`}>
                                 {formatMessageTime(msg.timestamp)}
+                                {!msg.leido && isMine && ' · ✓'}
                               </p>
                             </div>
                           </div>
@@ -476,8 +438,8 @@ export default function ChatPage() {
                         rows={1}
                         disabled={sending}
                       />
-                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-                        ⏎
+                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm">
+                        ⏎ Enter
                       </div>
                     </div>
                     <button
@@ -488,14 +450,12 @@ export default function ChatPage() {
                       {sending ? (
                         <>
                           <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                          Enviando...
                         </>
                       ) : (
                         <>
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                           </svg>
-                          Enviar
                         </>
                       )}
                     </button>
