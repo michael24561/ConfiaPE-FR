@@ -8,6 +8,7 @@ import { Mail, Lock, Eye, Loader2, EyeOff, LogIn, ShieldCheck, Clock, DollarSign
 
 export default function LoginPage() {
   const [mostrarPassword, setMostrarPassword] = useState(false)
+  const [tipoUsuario, setTipoUsuario] = useState<'cliente' | 'tecnico' | 'admin'>('cliente') // Reintroduced
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [recordarme, setRecordarme] = useState(false)
@@ -31,10 +32,6 @@ export default function LoginPage() {
     setLoading(true)
     try {
       const { user, tokens } = await loginApi(email, password)
-
-      if (tipoUsuario === 'admin' && user.rol !== 'ADMIN') {
-        throw new Error('No tienes permisos de administrador')
-      }
 
       saveSession(user, tokens.accessToken, recordarme ? tokens.refreshToken : undefined)
 
