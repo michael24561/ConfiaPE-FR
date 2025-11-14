@@ -4,17 +4,17 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import HeaderCliente from '@/components/clientecomponents/HeaderCliente'
 import ClienteSidebar from '@/components/clientecomponents/ClienteSidebar'
-import { getStoredUser } from '@/lib/auth'
- import {
+import { getStoredUser, getAccessToken } from '@/lib/auth'
+import {
   Briefcase,
   CheckCircle,
-  Heart,
-  MessageSquare,
-  Search,
-  User,
+  Loader2,
   ClipboardList,
   ChevronRight,
   Bell,
+  Search,
+  MessageSquare,
+  User,
 } from 'lucide-react'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
@@ -23,23 +23,13 @@ export default function ClienteDashboard() {
   const [user, setUser] = useState<any>(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [loading, setLoading] = useState(true)
-  const [isMobile, setIsMobile] = useState(false)
   const [stats, setStats] = useState({
-    trabajosActivos: 0,
+    totalSolicitudes: 0,
+    trabajosEnProgreso: 0,
     trabajosCompletados: 0,
-    tecnicosFavoritos: 0
   })
   const router = useRouter()
 
-  // Detectar móvil
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 1024)
-    checkMobile()
-    window.addEventListener('resize', checkMobile)
-    return () => window.removeEventListener('resize', checkMobile)
-  }, [])
-
-  // Verificar autenticación
   useEffect(() => {
     const storedUser = getStoredUser()
     if (!storedUser || storedUser.rol !== 'CLIENTE') {
@@ -47,78 +37,33 @@ export default function ClienteDashboard() {
       return
     }
     setUser(storedUser)
-    setLoading(false)
   }, [router])
 
-  // Cargar estadísticas
   useEffect(() => {
     const fetchStats = async () => {
       if (!user) return
-      
+      setLoading(true)
       try {
-        const token = localStorage.getItem('accessToken')
-        
-        // Cargar trabajos, favoritos en paralelo
-        const [trabajosRes, favoritosRes] = await Promise.all([
-          fetch(`${API_URL}/api/trabajos`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-          }),
-          fetch(`${API_URL}/api/favoritos`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-          })
-        ])
+        const token = getAccessToken()
+        const response = await fetch(`${API_URL}/api/dashboard/cliente-stats`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        })
+        const result = await response.json()
 
-        const trabajosData = await trabajosRes.json()
-        const favoritosData = await favoritosRes.json()
-
-        if (trabajosData.success) {
-          const trabajos = Array.isArray(trabajosData.data) ? trabajosData.data : []
-          const activos = trabajos.filter((t: any) => 
-            ['PENDIENTE', 'ACEPTADO', 'EN_PROGRESO'].includes(t.estado)
-          ).length
-          const completados = trabajos.filter((t: any) => 
-            t.estado === 'COMPLETADO'
-          ).length
-          
-          setStats(prev => ({
-            ...prev,
-            trabajosActivos: activos,
-            trabajosCompletados: completados
-          }))
-        }
-
-        if (favoritosData.success) {
-          const favoritos = Array.isArray(favoritosData.data) ? favoritosData.data : []
-          setStats(prev => ({
-            ...prev,
-            tecnicosFavoritos: favoritos.length
-          }))
+        if (result.success) {
+          setStats(result.data)
         }
       } catch (error) {
         console.error('Error al cargar estadísticas:', error)
+      } finally {
+        setLoading(false)
       }
     }
 
     fetchStats()
   }, [user])
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Cargando dashboard...</p>
-        </div>
-      </div>
-    )
-  }
-
- 
-
-
-// ... (keep existing code until the return statement)
-
-  if (loading) {
+  if (!user || loading) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-slate-50">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -148,7 +93,6 @@ export default function ClienteDashboard() {
           }`}
         >
           <div className="px-4 sm:px-8 py-8 max-w-7xl mx-auto">
-            {/* Header */}
             <div className="mb-10">
               <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-2">
                 ¡Hola, {user?.nombre}! 👋
@@ -158,13 +102,18 @@ export default function ClienteDashboard() {
               </p>
             </div>
 
-            {/* Stats Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
               <StatCard
                 icon={Briefcase}
-                label="Trabajos Activos"
-                value={stats.trabajosActivos}
+                label="Solicitudes Totales"
+                value={stats.totalSolicitudes}
                 color="blue"
+              />
+              <StatCard
+                icon={Loader2}
+                label="Trabajos en Progreso"
+                value={stats.trabajosEnProgreso}
+                color="purple"
               />
               <StatCard
                 icon={CheckCircle}
@@ -172,15 +121,8 @@ export default function ClienteDashboard() {
                 value={stats.trabajosCompletados}
                 color="green"
               />
-              <StatCard
-                icon={Heart}
-                label="Técnicos Favoritos"
-                value={stats.tecnicosFavoritos}
-                color="red"
-              />
             </div>
 
-            {/* Quick Actions & Recent Activity */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
               <div className="lg:col-span-2">
                 <h2 className="text-2xl font-bold text-slate-900 mb-6">
@@ -238,19 +180,17 @@ export default function ClienteDashboard() {
   )
 }
 
-// Helper components for the new design
-
-const StatCard = ({ icon: Icon, label, value, color }: { icon: React.ElementType, label: string, value: number | string, color: 'blue' | 'green' | 'red' }) => {
+const StatCard = ({ icon: Icon, label, value, color }: { icon: React.ElementType, label: string, value: number | string, color: 'blue' | 'green' | 'purple' }) => {
   const colors = {
     blue: 'text-blue-600 bg-blue-100',
     green: 'text-green-600 bg-green-100',
-    red: 'text-red-600 bg-red-100',
+    purple: 'text-purple-600 bg-purple-100',
   }
   
   return (
     <div className="bg-white rounded-2xl shadow-sm p-6 border border-slate-200/60 flex items-center gap-6">
       <div className={`w-14 h-14 rounded-xl flex items-center justify-center ${colors[color]}`}>
-        <Icon className="w-7 h-7" />
+        <Icon className={`w-7 h-7 ${value > 0 && color === 'purple' ? 'animate-spin' : ''}`} />
       </div>
       <div>
         <p className="text-3xl font-bold text-slate-900">{value}</p>
@@ -275,4 +215,3 @@ const QuickActionButton = ({ icon: Icon, title, description, onClick }: { icon: 
     <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-blue-600 transition-colors duration-200" />
   </button>
 )
-

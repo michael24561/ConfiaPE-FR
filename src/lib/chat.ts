@@ -59,7 +59,7 @@ export const getMessages = async (chatId: string, page = 1, limit = 50) => {
   return result.success ? result.data : result
 }
 
-export const createConversation = async (tecnicoId: string) => {
+export const createConversation = async (data: { tecnicoId?: string, adminId?: string }) => {
   const token = getAccessToken()
   const response = await fetch(`${API_URL}/api/chat/conversations`, {
     method: 'POST',
@@ -68,7 +68,7 @@ export const createConversation = async (tecnicoId: string) => {
       'Content-Type': 'application/json'
     },
     credentials: 'include',
-    body: JSON.stringify({ tecnicoId })
+    body: JSON.stringify(data)
   })
 
   if (!response.ok) {
@@ -115,6 +115,25 @@ export const markMessageAsRead = async (messageId: string) => {
   if (!response.ok) {
     const error = await response.json()
     throw new Error(error.error || 'Error al marcar mensaje como leído')
+  }
+
+  const result = await response.json()
+  return result.success ? result.data : result
+}
+
+export const getAdmin = async () => {
+  const token = getAccessToken()
+  const response = await fetch(`${API_URL}/api/users/admin`, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    credentials: 'include'
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Error al obtener datos del administrador')
   }
 
   const result = await response.json()

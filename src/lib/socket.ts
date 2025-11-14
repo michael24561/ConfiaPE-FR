@@ -23,22 +23,17 @@ export interface Message {
 export interface Conversation {
   id: string
   clienteId: string
-  tecnicoId: string
+  tecnicoId: string | null
+  adminId: string | null
   ultimoMensaje: string | null
-  ultimoMensajeAt: string | null
-  cliente: {
+  ultimoMensajeTimestamp: string | null
+  noLeidos: number
+  otherParty: {
     id: string
     nombre: string
     avatarUrl: string | null
-  }
-  tecnico: {
-    id: string
-    nombres: string
-    apellidos: string
-    oficio: string
-    user: {
-      avatarUrl: string | null
-    }
+    rol: 'CLIENTE' | 'TECNICO' | 'ADMIN'
+    oficio?: string | null
   }
 }
 

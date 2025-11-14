@@ -140,6 +140,19 @@ The technician-facing module (`/tecnico/*`) has been redesigned to align with th
 -   **Metrics:** Removed metric displays from the informative panel on the Login page.
 -   **Aesthetic Improvements:** Applied a cleaner, more modern design to form elements, buttons, and the informative panels, using `lucide-react` icons and a minimalist color palette.
 
+## Chat Functionality Improvements
+
+-   **Client Header Avatar:** Implemented logic to display the user's avatar in the `HeaderCliente` component, falling back to initials if no avatar is available.
+-   **Chat Avatars (General View):** Ensured that the `Conversation` interface in `src/lib/socket.ts` includes `avatarUrl` for both client and technician profiles, and that the `Image` components in `ConversationList` and `MessageView` in `src/app/cliente/chat/page.tsx` and `src/app/tecnico/chat/page.tsx` correctly attempt to display these avatars with appropriate fallback `alt` text.
+-   **New Chat Modal (Client-side):**
+    -   **Backend Endpoint:** Created a new backend endpoint `/api/users/chat-eligible` to provide a paginated and searchable list of technicians and the admin user, including their profile IDs, user IDs, names, avatar URLs, roles, and oficio (for technicians).
+    -   **Prisma Schema Update:** Modified the `Chat` model in `prisma/schema.prisma` to make `tecnicoId` optional and add an `adminId` field with its relation to the `User` model. The `@@unique([clienteId, tecnicoId])` constraint was removed, and uniqueness is now enforced in the service layer. A new Prisma migration (`add_admin_to_chat_model`) was generated and applied.
+    -   **Backend Service Update:** Updated `createOrGetConversation`, `getConversations`, and `getConversation` methods in `ConfiaPeBack/src/services/chat.service.ts` to correctly handle the new `adminId` field and optional `tecnicoId`.
+    -   **Backend Route Fix:** Corrected the `TypeError: Cannot read properties of undefined (reading 'bind')` in `ConfiaPeBack/src/routes/user.routes.ts` by ensuring the `UserController` instance is properly initialized and its methods are correctly bound to the routes.
+    -   **Frontend Integration:** Integrated the new backend endpoint into the `NewChatModal` in `src/app/cliente/chat/page.tsx` using the `getChatEligibleUsers` function from `src/lib/chat.ts`. The `createConversation` function in `src/lib/chat.ts` was updated to accept an object `{ tecnicoId?: string, adminId?: string }`.
+    -   **"Técnico no encontrado" Fix:** The changes ensure that the correct profile ID (either `Tecnico.id` or `User.id` for admin) is passed to the backend, resolving the "Técnico no encontrado" error.
+    -   **Frontend `SyntaxError` Fix:** Corrected the frontend `SyntaxError: Unexpected token '"'` by ensuring `createConversation` is called with the correct object format, preventing double-stringification of the request body.
+
 ## Development TODO
 
 ### Client Module

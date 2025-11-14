@@ -83,10 +83,16 @@ export default function HeaderCliente({
               onClick={() => setShowUserMenu(!showUserMenu)}
               className="flex items-center gap-2 p-1.5 pr-3 rounded-lg hover:bg-gray-100 transition-colors"
             >
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-full flex items-center justify-center">
-                <span className="text-white font-semibold text-sm">
-                  {user ? user.nombre?.charAt(0).toUpperCase() : 'U'}
-                </span>
+              <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-200 flex-shrink-0">
+                {user?.avatarUrl ? (
+                  <img src={user.avatarUrl} alt="User Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-600 to-indigo-600">
+                    <span className="text-white font-semibold text-sm">
+                      {user ? user.nombre?.charAt(0).toUpperCase() : 'U'}
+                    </span>
+                  </div>
+                )}
               </div>
               <div className="hidden sm:block text-left">
                 <p className="text-sm font-semibold text-gray-900">

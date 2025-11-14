@@ -5,15 +5,29 @@ import HeaderTecnico from "@/components/tecnicocomponents/HeaderTecnico"
 import TecnicoSidebar from "@/components/tecnicocomponents/TecnicoSidebar"
 import { getStoredUser, getAccessToken } from "@/lib/auth"
 import { useRouter } from "next/navigation"
-import { DollarSign, Star, Briefcase, Users } from "lucide-react"
+import { DollarSign, Star, Briefcase, Users, Loader2 } from "lucide-react"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
+// Interfaces matching backend response
 interface Stats {
-  totalIngresos: number;
-  promedioCalificacion: number;
-  trabajosCompletados: number;
-  nuevosClientes: number;
+  trabajos: {
+    total: number;
+    completados: number;
+    pendientes: number;
+    aceptados: number;
+    enProgreso: number;
+    cancelados: number;
+  };
+  ingresos: {
+    total: number;
+    promedioPorTrabajo: number;
+  };
+  reviews: {
+    total: number;
+    calificacionPromedio: number;
+  };
+  ultimosTrabajos: TrabajoReciente[];
 }
 
 interface TrabajoReciente {
@@ -32,7 +46,6 @@ export default function TecnicoDashboard() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState<Stats | null>(null)
-  const [recentJobs, setRecentJobs] = useState<TrabajoReciente[]>([])
   const router = useRouter()
 
   useEffect(() => {
@@ -45,16 +58,15 @@ export default function TecnicoDashboard() {
 
       try {
         const token = getAccessToken()
-        const [statsRes, jobsRes] = await Promise.all([
-          fetch(`${API_URL}/api/dashboard/stats`, { headers: { 'Authorization': `Bearer ${token}` } }),
-          fetch(`${API_URL}/api/trabajos?limit=5&page=1`, { headers: { 'Authorization': `Bearer ${token}` } })
-        ])
+        const response = await fetch(`${API_URL}/api/dashboard/stats`, { 
+          headers: { 'Authorization': `Bearer ${token}` } 
+        })
+        
+        const result = await response.json()
 
-        const statsData = await statsRes.json()
-        const jobsData = await jobsRes.json()
-
-        if (statsData.success) setStats(statsData.data)
-        if (jobsData.success) setRecentJobs(jobsData.data.data || [])
+        if (result.success) {
+          setStats(result.data)
+        }
 
       } catch (error) {
         console.error("Error fetching dashboard data:", error)
@@ -68,7 +80,7 @@ export default function TecnicoDashboard() {
   if (loading || !user) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-slate-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <Loader2 className="animate-spin h-12 w-12 text-blue-600" />
       </div>
     )
   }
@@ -99,10 +111,10 @@ export default function TecnicoDashboard() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-              <StatCard icon={DollarSign} label="Ingresos del Mes" value={`S/ ${(stats?.totalIngresos || 0).toFixed(2)}`} color="green" />
-              <StatCard icon={Star} label="Calificación Promedio" value={(stats?.promedioCalificacion || 0).toFixed(1)} color="yellow" />
-              <StatCard icon={Briefcase} label="Trabajos Completados" value={stats?.trabajosCompletados || 0} color="blue" />
-              <StatCard icon={Users} label="Nuevos Clientes" value={stats?.nuevosClientes || 0} color="purple" />
+              <StatCard icon={DollarSign} label="Ingresos Totales" value={`S/ ${(stats?.ingresos?.total || 0).toFixed(2)}`} color="green" />
+              <StatCard icon={Briefcase} label="Trabajos Totales" value={stats?.trabajos?.total || 0} color="blue" />
+              <StatCard icon={Briefcase} label="Trabajos Pendientes" value={stats?.trabajos?.pendientes || 0} color="yellow" />
+              <StatCard icon={Briefcase} label="Trabajos en Progreso" value={stats?.trabajos?.enProgreso || 0} color="purple" />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -115,7 +127,7 @@ export default function TecnicoDashboard() {
               <div className="bg-white rounded-2xl shadow-sm p-6 border border-slate-200/60">
                 <h3 className="text-xl font-bold text-slate-800 mb-4">Trabajos Recientes</h3>
                 <div className="space-y-4">
-                  {recentJobs.length > 0 ? recentJobs.map(job => (
+                  {stats?.ultimosTrabajos && stats.ultimosTrabajos.length > 0 ? stats.ultimosTrabajos.map(job => (
                     <div key={job.id} className="flex items-center gap-3">
                       <div className="p-2 bg-slate-100 rounded-lg">
                         <Briefcase className="w-5 h-5 text-slate-500" />
