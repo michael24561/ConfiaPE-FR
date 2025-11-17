@@ -5,6 +5,8 @@ import HeaderTecnico from "@/components/tecnicocomponents/HeaderTecnico"
 import TecnicoSidebar from "@/components/tecnicocomponents/TecnicoSidebar"
 import { me, getAccessToken } from "../../../lib/auth"
 import { useRouter } from "next/navigation"
+import StripeConnect from "@/components/StripeConnect";
+import ServiciosManager from "@/components/ServiciosManager";
 
 interface TecnicoProfile {
   nombres: string
@@ -52,7 +54,9 @@ export default function PerfilPage() {
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [certificados, setCertificados] = useState<Certificado[]>([])
+  const [servicios, setServicios] = useState<any[]>([])
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const [certificadoPreview, setCertificadoPreview] = useState<string | null>(null)
   const router = useRouter()
 
   const avatarInputRef = useRef<HTMLInputElement>(null)
@@ -111,6 +115,9 @@ export default function PerfilPage() {
         // Cargar certificados si existen
         if (tecnico.certificados) {
           setCertificados(tecnico.certificados)
+        }
+        if (tecnico.servicios) {
+          setServicios(tecnico.servicios)
         }
 
         // Inicializar formulario con datos actuales
@@ -717,6 +724,16 @@ export default function PerfilPage() {
               )}
             </div>
 
+            {/* Administrador de Servicios */}
+            <div className="mb-6 lg:mb-8">
+              <ServiciosManager initialServicios={servicios} />
+            </div>
+
+            {/* Stripe Connect */}
+            <div className="mb-6 lg:mb-8">
+              <StripeConnect />
+            </div>
+
             {/* Certificados */}
             <div className="bg-white rounded-2xl lg:rounded-3xl shadow-lg lg:shadow-xl p-4 sm:p-6 lg:p-8 mb-6 lg:mb-8 border border-gray-100">
               <div className="flex justify-between items-center mb-6">
@@ -777,24 +794,6 @@ export default function PerfilPage() {
                     {tecnicoData.trabajosCompletados || 0}
                   </p>
                   <p className="text-xs sm:text-sm text-blue-600 font-medium">Trabajos Completados</p>
-                </div>
-                <div className="text-center p-3 sm:p-4 bg-green-50 rounded-xl lg:rounded-2xl">
-                  <p className="text-xl sm:text-2xl font-black text-green-900">
-                    {parseFloat(tecnicoData.calificacionPromedio || '0').toFixed(1)}
-                  </p>
-                  <p className="text-xs sm:text-sm text-green-600 font-medium">Calificación Promedio</p>
-                </div>
-                <div className="text-center p-3 sm:p-4 bg-yellow-50 rounded-xl lg:rounded-2xl">
-                  <p className="text-xl sm:text-2xl font-black text-yellow-900">
-                    {tecnicoData._count?.reviews || 0}
-                  </p>
-                  <p className="text-xs sm:text-sm text-yellow-600 font-medium">Reviews</p>
-                </div>
-                <div className="text-center p-3 sm:p-4 bg-purple-50 rounded-xl lg:rounded-2xl">
-                  <p className="text-xl sm:text-2xl font-black text-purple-900">
-                    {certificados.length}
-                  </p>
-                  <p className="text-xs sm:text-sm text-purple-600 font-medium">Certificados</p>
                 </div>
               </div>
             </div>

@@ -3,42 +3,38 @@
 import { useState, useEffect } from 'react'
 import { logout, clearSession } from '@/lib/auth'
 import { useRouter } from 'next/navigation'
-
-interface Notificacion {
-  id: number
-  tipo: string
-  titulo: string
-  mensaje: string
-  timestamp: string
-  leida: boolean
-}
-
-import { PanelLeftClose } from 'lucide-react';
+import { useNotifications } from '@/context/NotificationContext'
+import NotificationPanel from '@/components/notifications/NotificationPanel'
+import { PanelLeftClose, Bell } from 'lucide-react';
 
 interface HeaderClienteProps {
   onMenuClick: () => void
-  onNotificationClick: () => void
-  notifications?: any[]
   user?: any
 }
 
 export default function HeaderCliente({
   onMenuClick,
-  onNotificationClick,
-  notifications = [],
   user
 }: HeaderClienteProps) {
   const router = useRouter()
   const [showUserMenu, setShowUserMenu] = useState(false)
-  const unreadCount = notifications.filter((n: any) => !n.leida).length
+  const [showNotifications, setShowNotifications] = useState(false);
+  const { unreadCount } = useNotifications();
 
   useEffect(() => {
-    const handleClickOutside = () => setShowUserMenu(false)
-    if (showUserMenu) {
-      document.addEventListener('click', handleClickOutside)
+    const handleClickOutside = (event: MouseEvent) => {
+      // Close user menu
+      if (showUserMenu && !(event.target as HTMLElement).closest('#user-menu-button')) {
+        setShowUserMenu(false)
+      }
+      // Close notification panel
+      if (showNotifications && !(event.target as HTMLElement).closest('#notification-button')) {
+        setShowNotifications(false)
+      }
     }
+    document.addEventListener('click', handleClickOutside)
     return () => document.removeEventListener('click', handleClickOutside)
-  }, [showUserMenu])
+  }, [showUserMenu, showNotifications])
 
   const handleLogout = () => {
     clearSession()
@@ -63,24 +59,26 @@ export default function HeaderCliente({
         {/* Lado derecho - Notificaciones y perfil */}
         <div className="flex items-center gap-2">
           {/* Notificaciones */}
-          {onNotificationClick && (
+          <div id="notification-button" className="relative">
             <button
-              onClick={onNotificationClick}
+              onClick={() => setShowNotifications(prev => !prev)}
               className="relative p-2 rounded-lg hover:bg-gray-100 transition-colors"
             >
-              <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-              </svg>
+              <Bell className="w-6 h-6 text-gray-700" />
               {unreadCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
+                <span className="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+                </span>
               )}
             </button>
-          )}
+            {showNotifications && <NotificationPanel />}
+          </div>
 
           {/* Perfil */}
-          <div className="relative">
+          <div id="user-menu-button" className="relative">
             <button
-              onClick={() => setShowUserMenu(!showUserMenu)}
+              onClick={() => setShowUserMenu(prev => !prev)}
               className="flex items-center gap-2 p-1.5 pr-3 rounded-lg hover:bg-gray-100 transition-colors"
             >
               <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-200 flex-shrink-0">

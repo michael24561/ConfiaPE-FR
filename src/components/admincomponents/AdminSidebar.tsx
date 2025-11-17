@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   Building,
   ShieldCheck,
+  Star,
 } from 'lucide-react'
 import Image from 'next/image'
 
@@ -19,8 +20,7 @@ const navItems = [
   { href: '/admin/clientes', icon: Users, label: 'Clientes' },
   { href: '/admin/trabajos', icon: Briefcase, label: 'Trabajos' },
   { href: '/admin/reportes', icon: ShieldCheck, label: 'Reportes' },
-  { href: '/admin/servicios', icon: Building, label: 'Servicios' },
-  { href: '/admin/configuracion', icon: Settings, label: 'Configuración' },
+  { href: '/admin/calificaciones', icon: Star, label: 'Calificaciones' },
 ]
 
 export default function AdminSidebar({ isOpen, onClose, onToggle }: { isOpen: boolean; onClose: () => void; onToggle: () => void; }) {
@@ -40,8 +40,8 @@ export default function AdminSidebar({ isOpen, onClose, onToggle }: { isOpen: bo
       {/* Sidebar */}
       <div
         id="sidebar"
-        className={`flex flex-col absolute z-40 left-0 top-0 lg:static lg:left-auto lg:top-auto lg:translate-x-0 h-screen overflow-y-auto w-72 lg:w-72 lg:sidebar-expanded:!w-72 2xl:!w-72 shrink-0 bg-slate-800 p-4 transition-all duration-200 ease-in-out ${
-          isOpen ? 'translate-x-0' : '-translate-x-72'
+        className={`flex flex-col fixed z-40 left-0 top-0 h-screen overflow-y-auto w-72 shrink-0 bg-slate-800 p-4 transition-all duration-200 ease-in-out ${
+          isOpen ? 'translate-x-0' : '-translate-x-72 lg:translate-x-0' // Keep it open on large screens
         }`}
       >
         {/* Sidebar header */}

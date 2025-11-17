@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { getAccessToken } from '@/lib/auth'
+import { createCalificacion, updateOwnCalificacion } from '@/lib/calificacionApi'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
@@ -15,6 +16,12 @@ interface Props {
       nombres: string
       apellidos: string
     }
+    calificacion?: {
+      id: string
+      puntuacion: number
+      comentario: string
+      fotos?: string[]
+    } | null
   }
   onSuccess: () => void
 }
@@ -27,6 +34,24 @@ export default function CalificarTrabajoModal({ isOpen, onClose, trabajo, onSucc
   const [comentario, setComentario] = useState('')
   const [esPublico, setEsPublico] = useState(true)
   const [fotosUrls, setFotosUrls] = useState<string[]>([])
+
+  const isEditMode = !!trabajo.calificacion;
+
+  useEffect(() => {
+    if (isOpen) {
+      if (isEditMode) {
+        setPuntuacion(trabajo.calificacion!.puntuacion)
+        setComentario(trabajo.calificacion!.comentario)
+        setFotosUrls(trabajo.calificacion!.fotos || [])
+      } else {
+        // Reset form for new rating
+        setPuntuacion(0)
+        setComentario('')
+        setEsPublico(true)
+        setFotosUrls([])
+      }
+    }
+  }, [isOpen, isEditMode, trabajo.calificacion])
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
@@ -43,9 +68,7 @@ export default function CalificarTrabajoModal({ isOpen, onClose, trabajo, onSucc
 
         const response = await fetch(`${API_URL}/api/upload/image`, {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          },
+          headers: { 'Authorization': `Bearer ${token}` },
           body: formData
         })
 
@@ -54,8 +77,7 @@ export default function CalificarTrabajoModal({ isOpen, onClose, trabajo, onSucc
           uploadedUrls.push(data.data.url)
         }
       }
-
-      setFotosUrls([...fotosUrls, ...uploadedUrls])
+      setFotosUrls(prev => [...prev, ...uploadedUrls])
     } catch (error) {
       console.error('Error al subir fotos:', error)
       alert('Error al subir algunas fotos')
@@ -74,39 +96,34 @@ export default function CalificarTrabajoModal({ isOpen, onClose, trabajo, onSucc
 
     setLoading(true)
     try {
-      const token = getAccessToken()
-      const response = await fetch(`${API_URL}/api/calificaciones`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
+      if (isEditMode) {
+        await updateOwnCalificacion(trabajo.calificacion!.id, {
+          puntuacion,
+          comentario,
+          esPublico,
+          fotos: fotosUrls,
+        })
+        alert('✅ Calificación actualizada correctamente')
+      } else {
+        await createCalificacion({
           trabajoId: trabajo.id,
           puntuacion,
           comentario,
+          esPublico,
           fotos: fotosUrls,
-          esPublico
         })
-      })
-
-      const data = await response.json()
-
-      if (data.success) {
         alert('✅ Calificación enviada correctamente')
-        onSuccess()
-        onClose()
-      } else {
-        alert('❌ Error: ' + (data.error || 'No se pudo enviar la calificación'))
       }
-    } catch (error) {
+      onSuccess()
+      onClose()
+    } catch (error: any) {
       console.error('Error:', error)
-      alert('❌ Error al enviar calificación')
+      alert(`❌ Error: ${error.message || 'No se pudo guardar la calificación'}`)
     } finally {
       setLoading(false)
     }
   }
-
+  
   const removeFoto = (index: number) => {
     setFotosUrls(fotosUrls.filter((_, i) => i !== index))
   }
@@ -117,7 +134,7 @@ export default function CalificarTrabajoModal({ isOpen, onClose, trabajo, onSucc
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl max-w-2xl w-full p-8 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-3xl font-bold text-gray-900">Calificar Servicio</h2>
+          <h2 className="text-3xl font-bold text-gray-900">{isEditMode ? 'Editar Calificación' : 'Calificar Servicio'}</h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -191,7 +208,7 @@ export default function CalificarTrabajoModal({ isOpen, onClose, trabajo, onSucc
               placeholder="¿Qué te pareció el servicio? ¿El técnico fue puntual? ¿Quedó bien el trabajo?"
             />
           </div>
-
+          
           {/* Fotos */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -228,7 +245,6 @@ export default function CalificarTrabajoModal({ isOpen, onClose, trabajo, onSucc
               </label>
             </div>
 
-            {/* Vista previa de fotos */}
             {fotosUrls.length > 0 && (
               <div className="grid grid-cols-3 gap-4 mt-4">
                 {fotosUrls.map((url, index) => (
@@ -282,7 +298,7 @@ export default function CalificarTrabajoModal({ isOpen, onClose, trabajo, onSucc
               disabled={loading || uploading || puntuacion === 0}
               className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Enviando...' : 'Enviar Calificación'}
+              {loading ? 'Guardando...' : (isEditMode ? 'Actualizar Calificación' : 'Enviar Calificación')}
             </button>
           </div>
         </form>

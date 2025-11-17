@@ -1,8 +1,7 @@
-'use client'
-
 import { useState } from 'react'
 import { Loader2, X } from 'lucide-react'
 import { reportarTrabajo } from '@/lib/trabajoApi'
+import { toast } from 'react-toastify'; // Import toast
 
 interface ReportarTrabajoModalProps {
   isOpen: boolean
@@ -41,7 +40,7 @@ export default function ReportarTrabajoModal({
     setError(null)
     try {
       await reportarTrabajo(trabajoId, { motivo, descripcion })
-      alert('Reporte enviado exitosamente. Un administrador revisará tu caso.')
+      toast.success('Reporte enviado exitosamente. Un administrador revisará tu caso.'); // Replaced alert with toast
       onSuccess()
     } catch (err: any) {
       setError(err.message || 'Ocurrió un error al enviar el reporte.')
@@ -53,7 +52,7 @@ export default function ReportarTrabajoModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
+    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex justify-center items-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
         <div className="flex justify-between items-center p-5 border-b border-slate-200">
           <h2 className="text-xl font-bold text-slate-800">Reportar un Problema</h2>

@@ -22,6 +22,7 @@ export default function IngresosPage() {
   const [user, setUser] = useState<any>(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [stats, setStats] = useState<IngresosStats | null>(null)
+  const [netIncome, setNetIncome] = useState<number | null>(null);
   const [loading, setLoading] = useState(true)
   const [periodo, setPeriodo] = useState<Periodo>('mes')
   const router = useRouter()
@@ -41,23 +42,40 @@ export default function IngresosPage() {
       setLoading(true)
       try {
         const token = getAccessToken()
-        const response = await fetch(`${API_URL}/api/dashboard/ingresos?periodo=${periodo}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
-        const data = await response.json()
-        if (data.success) {
+        
+        const [ingresosResponse, netIncomeResponse] = await Promise.all([
+          fetch(`${API_URL}/api/dashboard/ingresos?periodo=${periodo}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          }),
+          fetch(`${API_URL}/api/tecnicos/me/ingresos`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
+        ]);
+
+        const ingresosData = await ingresosResponse.json();
+        const netIncomeData = await netIncomeResponse.json();
+
+        if (ingresosData.success) {
           setStats({
-            total: data.data?.total || 0,
-            promedioPorTrabajo: data.data?.promedioPorTrabajo || 0,
-            trabajos: data.data?.trabajos || 0,
-            detalle: Array.isArray(data.data?.detalle) ? data.data.detalle : []
+            total: ingresosData.data?.total || 0,
+            promedioPorTrabajo: ingresosData.data?.promedioPorTrabajo || 0,
+            trabajos: ingresosData.data?.trabajos || 0,
+            detalle: Array.isArray(ingresosData.data?.detalle) ? ingresosData.data.detalle : []
           })
         } else {
           setStats(null)
         }
+
+        if (netIncomeData.success) {
+          setNetIncome(netIncomeData.data.totalNetIncome);
+        } else {
+          setNetIncome(null);
+        }
+
       } catch (error) {
         console.error('Error cargando datos de ingresos:', error)
         setStats(null)
+        setNetIncome(null);
       } finally {
         setLoading(false)
       }
@@ -132,7 +150,13 @@ export default function IngresosPage() {
             ) : (
               <>
                 {/* Stats Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+                  <StatCard 
+                    icon={DollarSign} 
+                    label="Ingresos Netos Totales" 
+                    value={`S/ ${netIncome !== null ? netIncome.toFixed(2) : '0.00'}`} 
+                    color="green"
+                  />
                   <StatCard 
                     icon={DollarSign} 
                     label={`Total (${periodoLabels[periodo]})`} 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import HeaderCliente from '@/components/clientecomponents/HeaderCliente'
 import ClienteSidebar from '@/components/clientecomponents/ClienteSidebar'
 import { getStoredUser, getAccessToken } from '@/lib/auth'
@@ -12,6 +12,7 @@ import {
   rechazarCotizacion,
   cancelarTrabajo,
 } from '@/lib/trabajoApi'
+import { createCheckoutSession } from '@/lib/pagoApi'
 import {
   Briefcase,
   Calendar,
@@ -25,8 +26,13 @@ import {
   Loader2,
   AlertTriangle,
   Eye,
+  CreditCard,
+  Edit,
+  Trash2,
 } from 'lucide-react'
 import Image from 'next/image'
+import { deleteOwnCalificacion } from '@/lib/calificacionApi'
+import { useNotifications } from '@/context/NotificationContext'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
@@ -54,7 +60,11 @@ interface Trabajo {
     apellidos: string
     user: { avatarUrl: string | null }
   }
-  review: { id: string } | null
+  calificacion: {
+    id: string
+    puntuacion: number
+    comentario: string
+  } | null
 }
 
 export default function ClienteTrabajosPage() {
@@ -62,10 +72,16 @@ export default function ClienteTrabajosPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [trabajos, setTrabajos] = useState<Trabajo[]>([])
   const [loading, setLoading] = useState(true)
+  const [paymentLoading, setPaymentLoading] = useState<string | null>(null)
   const [filter, setFilter] = useState<string>('todos')
   const [calificarModal, setCalificarModal] = useState<Trabajo | null>(null)
   const [reporteModal, setReporteModal] = useState<Trabajo | null>(null)
+  const [confirmDeleteModalOpen, setConfirmDeleteModalOpen] = useState(false)
+  const [selectedCalificacionToDelete, setSelectedCalificacionToDelete] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const { updatedJob } = useNotifications();
 
   useEffect(() => {
     const storedUser = getStoredUser()
@@ -74,6 +90,14 @@ export default function ClienteTrabajosPage() {
     }
     setUser(storedUser)
   }, [router])
+
+  useEffect(() => {
+    if (updatedJob) {
+      setTrabajos(prevTrabajos =>
+        prevTrabajos.map(t => (t.id === updatedJob.id ? { ...t, ...updatedJob } : t))
+      );
+    }
+  }, [updatedJob]);
 
   const fetchTrabajos = async () => {
     if (!user) return
@@ -97,8 +121,22 @@ export default function ClienteTrabajosPage() {
   }
 
   useEffect(() => {
-    fetchTrabajos()
+    if(user) {
+      fetchTrabajos()
+    }
   }, [user, filter])
+
+  useEffect(() => {
+    const pagoStatus = searchParams.get('pago')
+    if (pagoStatus === 'exitoso') {
+      alert('¡Pago realizado con éxito! Tu trabajo ha sido aceptado.')
+      fetchTrabajos()
+      router.replace('/cliente/trabajos')
+    } else if (pagoStatus === 'cancelado') {
+      alert('El proceso de pago fue cancelado.')
+      router.replace('/cliente/trabajos')
+    }
+  }, [searchParams, router])
 
   const updateTrabajoState = (trabajoId: string, newState: TrabajoEstado) => {
     setTrabajos(prev =>
@@ -121,8 +159,35 @@ export default function ClienteTrabajosPage() {
     }
   }
 
+  const handleAcceptAndPay = async (trabajoId: string) => {
+    setPaymentLoading(trabajoId)
+    try {
+      const { url } = await createCheckoutSession(trabajoId)
+      window.location.href = url
+    } catch (error: any) {
+      alert(`Error al iniciar el pago: ${error.message}`)
+      setPaymentLoading(null)
+    }
+  }
+
   const handleChatTecnico = (tecnicoId: string) => {
     router.push(`/cliente/chat?tecnicoId=${tecnicoId}`)
+  }
+
+  const handleDeleteRating = async () => {
+    if (!selectedCalificacionToDelete) return
+    setDeleting(true)
+    try {
+      await deleteOwnCalificacion(selectedCalificacionToDelete)
+      alert('Calificación eliminada con éxito.')
+      fetchTrabajos()
+    } catch (error: any) {
+      alert(`Error al eliminar la calificación: ${error.message}`)
+    } finally {
+      setDeleting(false)
+      setConfirmDeleteModalOpen(false)
+      setSelectedCalificacionToDelete(null)
+    }
   }
 
   const filterOptions = [
@@ -165,19 +230,26 @@ export default function ClienteTrabajosPage() {
                 </button>
               </div>
             ) : (
-              <div className="space-y-6">
-                {trabajos.map(trabajo => (
-                  <TrabajoCard
-                    key={trabajo.id}
-                    trabajo={trabajo}
-                    onChat={() => handleChatTecnico(trabajo.tecnico.id)}
-                    onAcceptQuote={() => handleAction(aceptarCotizacion, trabajo.id, 'ACEPTADO')}
-                    onRejectQuote={() => handleAction(rechazarCotizacion, trabajo.id, 'RECHAZADO', '¿Estás seguro de rechazar esta cotización?')}
-                    onCancel={() => handleAction(cancelarTrabajo, trabajo.id, 'CANCELADO', '¿Estás seguro de cancelar este trabajo?')}
-                    onRate={() => setCalificarModal(trabajo)}
-                    onReport={() => setReporteModal(trabajo)}
-                  />
-                ))}
+              <div className="w-full overflow-x-auto">
+                <div className="space-y-6 min-w-max">
+                  {trabajos.map(trabajo => (
+                    <TrabajoCard
+                      key={trabajo.id}
+                      trabajo={trabajo}
+                      paymentLoading={paymentLoading === trabajo.id}
+                      onChat={() => handleChatTecnico(trabajo.tecnico.id)}
+                      onAcceptAndPay={() => handleAcceptAndPay(trabajo.id)}
+                      onRejectQuote={() => handleAction(rechazarCotizacion, trabajo.id, 'RECHAZADO', '¿Estás seguro de rechazar esta cotización?')}
+                      onCancel={() => handleAction(cancelarTrabajo, trabajo.id, 'CANCELADO', '¿Estás seguro de cancelar este trabajo?')}
+                      onRate={() => setCalificarModal(trabajo)}
+                      onReport={() => setReporteModal(trabajo)}
+                      onDelete={() => {
+                        setSelectedCalificacionToDelete(trabajo.calificacion!.id)
+                        setConfirmDeleteModalOpen(true)
+                      }}
+                    />
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -199,6 +271,15 @@ export default function ClienteTrabajosPage() {
           }}
         />
       )}
+
+      {confirmDeleteModalOpen && (
+        <ConfirmDeleteModal
+          isOpen={confirmDeleteModalOpen}
+          onClose={() => setConfirmDeleteModalOpen(false)}
+          onConfirm={handleDeleteRating}
+          loading={deleting}
+        />
+      )}
     </div>
   )
 }
@@ -207,15 +288,17 @@ export default function ClienteTrabajosPage() {
 
 interface TrabajoCardProps {
   trabajo: Trabajo
+  paymentLoading: boolean
   onChat: () => void
-  onAcceptQuote: () => void
+  onAcceptAndPay: () => void
   onRejectQuote: () => void
   onCancel: () => void
   onRate: () => void
   onReport: () => void
+  onDelete: () => void
 }
 
-const TrabajoCard = ({ trabajo, onChat, onAcceptQuote, onRejectQuote, onCancel, onRate, onReport }: TrabajoCardProps) => {
+const TrabajoCard = ({ trabajo, paymentLoading, onChat, onAcceptAndPay, onRejectQuote, onCancel, onRate, onReport, onDelete }: TrabajoCardProps) => {
   const estadoInfo = useMemo(() => {
     const base = 'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold'
     const styles: Record<TrabajoEstado, { style: string; icon: React.ElementType; text: string }> = {
@@ -233,34 +316,30 @@ const TrabajoCard = ({ trabajo, onChat, onAcceptQuote, onRejectQuote, onCancel, 
   }, [trabajo.estado])
 
   const renderActions = () => {
-    const btnBase = "flex items-center gap-2 px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors"
+    const btnBase = "flex items-center gap-2 px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors disabled:opacity-60"
     const btnGreen = `${btnBase} bg-green-600 hover:bg-green-700 text-white`
     const btnRed = `${btnBase} bg-red-600 hover:bg-red-700 text-white`
     const btnRedOutline = `${btnBase} bg-red-100 hover:bg-red-200 text-red-700`
     const btnBlue = `${btnBase} bg-blue-600 hover:bg-blue-700 text-white`
     const btnYellow = `${btnBase} bg-yellow-500 hover:bg-yellow-600 text-white`
     const btnGray = `${btnBase} bg-slate-100 hover:bg-slate-200 text-slate-800`
-    const btnAlert = `${btnBase} bg-amber-100 hover:bg-amber-200 text-amber-800`
-
-    const reportButton = <button onClick={onReport} className={btnAlert}><AlertTriangle className="w-4 h-4" /> Reportar</button>
 
     switch (trabajo.estado) {
       case 'PENDIENTE':
         return <button onClick={onCancel} className={btnRedOutline}><X className="w-4 h-4" /> Cancelar Solicitud</button>
       case 'NECESITA_VISITA':
         return (
-          <>
             <button onClick={onChat} className={btnBlue}><MessageSquare className="w-4 h-4" /> Coordinar Visita</button>
-            {reportButton}
-          </>
         )
       case 'COTIZADO':
         return (
           <>
-            <button onClick={onAcceptQuote} className={btnGreen}><Check className="w-4 h-4" /> Aceptar Cotización</button>
-            <button onClick={onRejectQuote} className={btnRed}><X className="w-4 h-4" /> Rechazar</button>
-            <button onClick={onChat} className={btnGray}><MessageSquare className="w-4 h-4" /> Consultar</button>
-            {reportButton}
+            <button onClick={onAcceptAndPay} className={btnGreen} disabled={paymentLoading}>
+              {paymentLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
+              {paymentLoading ? 'Procesando...' : 'Aceptar y Pagar'}
+            </button>
+            <button onClick={onRejectQuote} className={btnRed} disabled={paymentLoading}><X className="w-4 h-4" /> Rechazar</button>
+            <button onClick={onChat} className={btnGray} disabled={paymentLoading}><MessageSquare className="w-4 h-4" /> Consultar</button>
           </>
         )
       case 'ACEPTADO':
@@ -269,19 +348,23 @@ const TrabajoCard = ({ trabajo, onChat, onAcceptQuote, onRejectQuote, onCancel, 
           <>
             <button onClick={onChat} className={btnBlue}><MessageSquare className="w-4 h-4" /> Chatear con Técnico</button>
             <button onClick={onCancel} className={btnRedOutline}><X className="w-4 h-4" /> Cancelar Trabajo</button>
-            {reportButton}
           </>
         )
       case 'COMPLETADO':
-        if (!trabajo.review) {
+        if (!trabajo.calificacion) {
           return (
-            <>
               <button onClick={onRate} className={btnYellow}><Star className="w-4 h-4" /> Calificar Trabajo</button>
-              {reportButton}
-            </>
           )
         }
-        return reportButton
+        return (
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1">
+              {[...Array(5)].map((_, i) => <Star key={i} className={`w-5 h-5 ${i < trabajo.calificacion!.puntuacion ? 'text-yellow-400 fill-yellow-400' : 'text-slate-300'}`} />)}
+            </div>
+            <button onClick={onRate} className={`${btnGray} py-1 px-2`}><Edit className="w-4 h-4" /> Editar</button>
+            <button onClick={onDelete} className={`${btnRedOutline} py-1 px-2`}><Trash2 className="w-4 h-4" /> Eliminar</button>
+          </div>
+        )
       case 'EN_DISPUTA':
         return <p className="text-sm font-semibold text-red-800">Reporte en revisión por un administrador.</p>
       default:
@@ -326,9 +409,52 @@ const TrabajoCard = ({ trabajo, onChat, onAcceptQuote, onRejectQuote, onCancel, 
         <p className="text-sm text-slate-600 mb-5">{trabajo.descripcion}</p>
       </div>
       
-      <div className="bg-slate-50/80 px-5 sm:px-6 py-3 flex flex-wrap items-center gap-3">
-        {renderActions()}
+      <div className="bg-slate-50/80 px-5 sm:px-6 py-3 flex justify-between items-center gap-3">
+        {/* Dejar el botón de reportar a la izquierda (o quitarlo si no aplica a todos los estados) */}
+        <div>
+          {['PENDIENTE', 'NECESITA_VISITA', 'COTIZADO', 'ACEPTADO', 'EN_PROGRESO', 'COMPLETADO'].includes(trabajo.estado) && (
+            <button onClick={onReport} className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors bg-amber-100 hover:bg-amber-200 text-amber-800">
+              <AlertTriangle className="w-4 h-4" /> Reportar
+            </button>
+          )}
+        </div>
+        {/* Agrupar botones de acción principal a la derecha */}
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          {renderActions()}
+        </div>
       </div>
     </div>
   )
 }
+
+const ConfirmDeleteModal = ({ isOpen, onClose, onConfirm, loading }: { isOpen: boolean, onClose: () => void, onConfirm: () => void, loading: boolean }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+        <h3 className="text-xl font-bold text-slate-900 mb-4">Confirmar Eliminación</h3>
+        <p className="text-slate-600 mb-6">
+          ¿Estás seguro de que quieres eliminar esta calificación? Esta acción no se puede deshacer.
+        </p>
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-100"
+            disabled={loading}
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirm}
+            className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+            disabled={loading}
+          >
+            {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            Eliminar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};

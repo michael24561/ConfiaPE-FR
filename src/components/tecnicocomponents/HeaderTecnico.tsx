@@ -3,33 +3,24 @@
 import { useState, useEffect, useRef } from 'react'
 import { logout } from '@/lib/auth'
 import { useRouter } from 'next/navigation'
-import { PanelLeft, Bell, User, Settings, LogOut, HelpCircle, ChevronDown, X } from 'lucide-react'
+import { useNotifications } from '@/context/NotificationContext'
+import NotificationPanel from '@/components/notifications/NotificationPanel'
+import { PanelLeft, Bell, User, Settings, LogOut, HelpCircle, ChevronDown } from 'lucide-react'
 import Link from 'next/link'
-
-interface Notificacion {
-  id: string;
-  mensaje: string;
-  leida: boolean;
-  timestamp: string;
-  tipo: string;
-}
 
 interface HeaderTecnicoProps {
   onMenuClick: () => void
-  onNotificationClick: () => void // This prop will now be used to toggle the panel
-  notifications?: Notificacion[]
   user?: any
 }
 
 export default function HeaderTecnico({
   onMenuClick,
-  notifications = [],
   user
 }: HeaderTecnicoProps) {
   const router = useRouter()
   const [showUserMenu, setShowUserMenu] = useState(false)
-  const [showNotificationsPanel, setShowNotificationsPanel] = useState(false)
-  const unreadCount = notifications.filter(n => !n.leida).length
+  const [showNotifications, setShowNotifications] = useState(false)
+  const { unreadCount } = useNotifications()
 
   const userMenuRef = useRef<HTMLDivElement>(null)
   const notificationsPanelRef = useRef<HTMLDivElement>(null)
@@ -40,11 +31,11 @@ export default function HeaderTecnico({
         setShowUserMenu(false)
       }
       if (notificationsPanelRef.current && !notificationsPanelRef.current.contains(event.target as Node)) {
-        setShowNotificationsPanel(false)
+        setShowNotifications(false)
       }
     }
-    window.addEventListener('click', handleClickOutside)
-    return () => window.removeEventListener('click', handleClickOutside)
+    document.addEventListener('click', handleClickOutside)
+    return () => document.removeEventListener('click', handleClickOutside)
   }, [])
 
   const handleLogout = () => {
@@ -53,8 +44,8 @@ export default function HeaderTecnico({
   }
 
   const handleNotificationClick = (event: React.MouseEvent) => {
-    event.stopPropagation() // Prevent click from closing the panel immediately
-    setShowNotificationsPanel(prev => !prev)
+    event.stopPropagation()
+    setShowNotifications(prev => !prev)
   }
 
   return (
@@ -81,12 +72,13 @@ export default function HeaderTecnico({
             >
               <Bell className="w-6 h-6 text-slate-700" />
               {unreadCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
+                <span className="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+                </span>
               )}
             </button>
-            {showNotificationsPanel && (
-              <NotificationsPanel notifications={notifications} onClose={() => setShowNotificationsPanel(false)} />
-            )}
+            {showNotifications && <NotificationPanel />}
           </div>
 
           <div className="relative" ref={userMenuRef}>
@@ -138,34 +130,5 @@ export default function HeaderTecnico({
         </div>
       </div>
     </header>
-  )
-}
-
-const NotificationsPanel = ({ notifications, onClose }: { notifications: Notificacion[], onClose: () => void }) => {
-  return (
-    <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-slate-200/80 py-1 z-50">
-      <div className="px-4 py-3 border-b border-slate-100 flex justify-between items-center">
-        <p className="text-sm font-semibold text-slate-800">Notificaciones</p>
-        <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-100"><X className="w-4 h-4 text-slate-600" /></button>
-      </div>
-      <div className="py-1 max-h-60 overflow-y-auto">
-        {notifications.length === 0 ? (
-          <p className="text-xs text-slate-500 text-center py-4">No hay notificaciones nuevas.</p>
-        ) : (
-          notifications.map(notif => (
-            <div key={notif.id} className={`flex items-start gap-3 px-4 py-2 text-sm ${notif.leida ? 'text-slate-500' : 'text-slate-800 font-medium'} hover:bg-slate-50`}>
-              <Bell className={`w-4 h-4 ${notif.leida ? 'text-slate-400' : 'text-blue-500'}`} />
-              <div className="flex-1">
-                <p>{notif.mensaje}</p>
-                <p className="text-xs text-slate-400">{new Date(notif.timestamp).toLocaleString()}</p>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-      <div className="border-t border-slate-100 pt-1">
-        <button className="w-full text-blue-600 text-sm py-2 hover:bg-slate-50">Ver todas</button>
-      </div>
-    </div>
   )
 }

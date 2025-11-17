@@ -117,7 +117,7 @@ export default function ClientesPage() {
                         </th>
                         <td className="px-6 py-4">{cliente.email}</td>
                         <td className="px-6 py-4 text-center">{trabajosTotal}</td>
-                        <td className="px-6 py-4 text-right font-medium">S/ {totalGastado.toFixed(2)}</td>
+                        <td className="px-6 py-4 text-right font-medium">S/ {(totalGastado || 0).toFixed(2)}</td>
                         <td className="px-6 py-4 text-center">
                           <button onClick={() => router.push(`/tecnico/chat?clienteId=${cliente.userId}`)} className="p-2 text-slate-500 hover:bg-slate-200 rounded-md transition-colors">
                             <MessageSquare className="w-5 h-5" />

@@ -5,30 +5,21 @@ import { useRouter } from "next/navigation"
 import HeaderTecnico from "@/components/tecnicocomponents/HeaderTecnico"
 import TecnicoSidebar from "@/components/tecnicocomponents/TecnicoSidebar"
 import { getStoredUser, getAccessToken } from "@/lib/auth"
-import { Star, MessageSquare, ThumbsUp, Edit } from "lucide-react"
+import { Star, MessageSquare, ThumbsUp, Edit, Loader2 } from "lucide-react"
 import Image from "next/image"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
 interface Review {
   id: string;
-  calificacion: number;
+  puntuacion: number;
   comentario: string;
   respuesta: string | null;
   fechaCreacion: string;
-  cliente: {
-    user: {
-      nombre: string;
-      avatarUrl: string | null;
-    }
-  }
-}
-
-interface Stats {
-  promedio: number;
-  total: number;
-  distribucion: {
-    '5': number; '4': number; '3': number; '2': number; '1': number;
+  fotos?: string[];
+  user: {
+    nombre: string;
+    avatarUrl: string | null;
   }
 }
 
@@ -36,9 +27,11 @@ export default function CalificacionesPage() {
   const [user, setUser] = useState<any>(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [reviews, setReviews] = useState<Review[]>([])
-  const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('todos')
+  const [page, setPage] = useState(1)
+  const [limit, setLimit] = useState(10)
+  const [totalPages, setTotalPages] = useState(1)
   const router = useRouter()
 
   useEffect(() => {
@@ -59,17 +52,17 @@ export default function CalificacionesPage() {
         
         const params = new URLSearchParams()
         if (filter !== 'todos') params.append('calificacion', filter)
+        params.append('page', page.toString())
+        params.append('limit', limit.toString())
 
-        const [statsRes, reviewsRes] = await Promise.all([
-          fetch(`${API_URL}/api/reviews/tecnico/${user.perfilId}/stats`, { headers }),
-          fetch(`${API_URL}/api/reviews/tecnico/${user.perfilId}?${params.toString()}`, { headers })
-        ])
+        const reviewsRes = await fetch(`${API_URL}/api/calificaciones/tecnico/${user.perfilId}?${params.toString()}`, { headers })
 
-        const statsData = await statsRes.json()
         const reviewsData = await reviewsRes.json()
 
-        if (statsData.success) setStats(statsData.data)
-        if (reviewsData.success) setReviews(reviewsData.data.data || [])
+        if (reviewsData.success) {
+          setReviews(reviewsData.data || [])
+          setTotalPages(reviewsData.pagination.pages)
+        }
 
       } catch (error) {
         console.error('Error cargando datos:', error)
@@ -77,8 +70,16 @@ export default function CalificacionesPage() {
         setLoading(false)
       }
     }
-    loadData()
-  }, [user, filter])
+    if (user) {
+      loadData()
+    }
+  }, [user, filter, page, limit])
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage > 0 && newPage <= totalPages) {
+      setPage(newPage)
+    }
+  }
 
   const handleReplySuccess = (reviewId: string, newReply: string) => {
     setReviews(prev => prev.map(r => r.id === reviewId ? { ...r, respuesta: newReply } : r))
@@ -104,17 +105,10 @@ export default function CalificacionesPage() {
               <p className="text-slate-500 text-lg">Revisa lo que tus clientes opinan de tu trabajo.</p>
             </div>
 
-            {loading && !stats ? (
-              <div className="flex justify-center items-center py-20"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>
+            {loading ? (
+              <div className="flex justify-center items-center py-20"><Loader2 className="w-12 h-12 animate-spin text-blue-600" /></div>
             ) : (
               <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-                  <StatCard icon={Star} label="Promedio General" value={stats?.promedio.toFixed(1) || 'N/A'} color="yellow" />
-                  <StatCard icon={MessageSquare} label="Total de Reseñas" value={stats?.total || 0} color="blue" />
-                  <StatCard icon={ThumbsUp} label="Reseñas Positivas" value={(stats?.distribucion['5'] || 0) + (stats?.distribucion['4'] || 0)} color="green" />
-                  <StatCard icon={Star} label="5 Estrellas" value={stats?.distribucion['5'] || 0} color="purple" />
-                </div>
-
                 <div className="mb-6 border-b border-slate-200">
                   <div className="flex items-center gap-4 sm:gap-6 overflow-x-auto pb-px">
                     {filterOptions.map(({ id, label }) => (
@@ -132,6 +126,27 @@ export default function CalificacionesPage() {
                     reviews.map(review => <ReviewCard key={review.id} review={review} onReplySuccess={handleReplySuccess} />)
                   )}
                 </div>
+
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <div className="flex justify-between items-center mt-8">
+                    <button
+                      onClick={() => handlePageChange(page - 1)}
+                      disabled={page === 1}
+                      className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 disabled:opacity-50"
+                    >
+                      Anterior
+                    </button>
+                    <span className="text-sm text-slate-600">Página {page} de {totalPages}</span>
+                    <button
+                      onClick={() => handlePageChange(page + 1)}
+                      disabled={page === totalPages}
+                      className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 disabled:opacity-50"
+                    >
+                      Siguiente
+                    </button>
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -141,33 +156,21 @@ export default function CalificacionesPage() {
   )
 }
 
-const StatCard = ({ icon: Icon, label, value, color }: any) => {
-    const colors = {
-      yellow: 'text-yellow-600 bg-yellow-100',
-      blue: 'text-blue-600 bg-blue-100',
-      green: 'text-green-600 bg-green-100',
-      purple: 'text-purple-600 bg-purple-100',
-    }
-    return (
-      <div className="bg-white rounded-2xl shadow-sm p-5 border border-slate-200/60">
-        <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-4 ${colors[color]}`}><Icon className="w-6 h-6" /></div>
-        <p className="text-3xl font-bold text-slate-900">{value}</p>
-        <p className="text-sm text-slate-500">{label}</p>
-      </div>
-    )
-}
-
 const ReviewCard = ({ review, onReplySuccess }: { review: Review, onReplySuccess: (id: string, reply: string) => void }) => {
   const [isReplying, setIsReplying] = useState(false)
   const [replyText, setReplyText] = useState('')
   const [isSaving, setIsSaving] = useState(false)
 
   const handleSaveReply = async () => {
+    // Temporarily disabled
+    alert("La funcionalidad de respuesta no está disponible actualmente.");
+    return;
+    /*
     if (!replyText.trim()) return
     setIsSaving(true)
     try {
       const token = getAccessToken()
-      const response = await fetch(`${API_URL}/api/reviews/${review.id}/respuesta`, {
+      const response = await fetch(`${API_URL}/api/calificaciones/${review.id}/respuesta`, {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ respuesta: replyText })
@@ -182,19 +185,20 @@ const ReviewCard = ({ review, onReplySuccess }: { review: Review, onReplySuccess
     } finally {
       setIsSaving(false)
     }
+    */
   }
 
   return (
     <div className="bg-white rounded-2xl shadow-sm p-6 border border-slate-200/60">
       <div className="flex items-start gap-4 mb-3">
         <div className="relative w-11 h-11 rounded-full bg-slate-200 flex-shrink-0">
-          {review.cliente.user.avatarUrl && <Image src={review.cliente.user.avatarUrl} alt={review.cliente.user.nombre} fill className="object-cover rounded-full" unoptimized />}
+          {review.user.avatarUrl && <Image src={review.user.avatarUrl} alt={review.user.nombre} fill className="object-cover rounded-full" unoptimized />}
         </div>
         <div className="flex-1">
-          <p className="font-semibold text-slate-800">{review.cliente.user.nombre}</p>
+          <p className="font-semibold text-slate-800">{review.user.nombre}</p>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-0.5">
-              {[...Array(5)].map((_, i) => <Star key={i} className={`w-4 h-4 ${i < review.calificacion ? 'text-yellow-400 fill-yellow-400' : 'text-slate-300'}`} />)}
+              {[...Array(5)].map((_, i) => <Star key={i} className={`w-4 h-4 ${i < review.puntuacion ? 'text-yellow-400 fill-yellow-400' : 'text-slate-300'}`} />)}
             </div>
             <span className="text-xs text-slate-400">{new Date(review.fechaCreacion).toLocaleDateString('es-PE')}</span>
           </div>
@@ -202,6 +206,23 @@ const ReviewCard = ({ review, onReplySuccess }: { review: Review, onReplySuccess
       </div>
       <p className="text-slate-600 text-sm mb-4 pl-15">{review.comentario}</p>
       
+      {review.fotos && review.fotos.length > 0 && (
+        <div className="pl-15 mt-4 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+          {review.fotos.map((foto, index) => (
+            <a key={index} href={foto} target="_blank" rel="noopener noreferrer">
+              <Image
+                src={foto}
+                alt={`Foto ${index + 1} de la reseña`}
+                width={100}
+                height={100}
+                className="object-cover rounded-md aspect-square"
+                unoptimized
+              />
+            </a>
+          ))}
+        </div>
+      )}
+
       {review.respuesta ? (
         <div className="pl-15 mt-4">
           <div className="bg-slate-100 p-4 rounded-lg">

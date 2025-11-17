@@ -11,6 +11,7 @@ import {
   Briefcase, Calendar, MessageSquare, DollarSign, CheckCircle, XCircle, Clock, Wrench, Eye, Loader2, Send, AlertTriangle,
 } from 'lucide-react'
 import Image from 'next/image'
+import { useNotifications } from '@/context/NotificationContext'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
@@ -51,6 +52,7 @@ export default function TecnicoTrabajosPage() {
   const [cotizarModal, setCotizarModal] = useState<Trabajo | null>(null)
   const [reporteModal, setReporteModal] = useState<Trabajo | null>(null)
   const router = useRouter()
+  const { updatedJob } = useNotifications();
 
   useEffect(() => {
     const storedUser = getStoredUser()
@@ -59,6 +61,14 @@ export default function TecnicoTrabajosPage() {
     }
     setUser(storedUser)
   }, [router])
+
+  useEffect(() => {
+    if (updatedJob) {
+      setTrabajos(prevTrabajos =>
+        prevTrabajos.map(t => (t.id === updatedJob.id ? { ...t, ...updatedJob } : t))
+      );
+    }
+  }, [updatedJob]);
 
   const fetchTrabajos = async () => {
     if (!user) return
@@ -173,20 +183,22 @@ export default function TecnicoTrabajosPage() {
                 <p className="text-slate-500">Cuando recibas una solicitud, aparecerá aquí.</p>
               </div>
             ) : (
-              <div className="space-y-6">
-                {trabajos.map(trabajo => (
-                  <TrabajoCardTecnico
-                    key={trabajo.id}
-                    trabajo={trabajo}
-                    onChat={() => handleChat(trabajo.cliente.userId)}
-                    onRechazar={() => handleAction(trabajoApi.rechazarSolicitud, trabajo.id, 'RECHAZADO', '¿Estás seguro de rechazar esta solicitud?')}
-                    onSolicitarVisita={() => handleAction(trabajoApi.solicitarVisita, trabajo.id, 'NECESITA_VISITA')}
-                    onCotizar={() => setCotizarModal(trabajo)}
-                    onIniciar={() => handleAction(trabajoApi.iniciarTrabajo, trabajo.id, 'EN_PROGRESO')}
-                    onCompletar={() => handleAction(trabajoApi.completarTrabajo, trabajo.id, 'COMPLETADO', '¿Confirmas que has completado este trabajo?')}
-                    onReport={() => setReporteModal(trabajo)}
-                  />
-                ))}
+              <div className="w-full overflow-x-auto">
+                <div className="space-y-6 min-w-max">
+                  {trabajos.map(trabajo => (
+                    <TrabajoCardTecnico
+                      key={trabajo.id}
+                      trabajo={trabajo}
+                      onChat={() => handleChat(trabajo.cliente.userId)}
+                      onRechazar={() => handleAction(trabajoApi.rechazarSolicitud, trabajo.id, 'RECHAZADO', '¿Estás seguro de rechazar esta solicitud?')}
+                      onSolicitarVisita={() => handleAction(trabajoApi.solicitarVisita, trabajo.id, 'NECESITA_VISITA')}
+                      onCotizar={() => setCotizarModal(trabajo)}
+                      onIniciar={() => handleAction(trabajoApi.iniciarTrabajo, trabajo.id, 'EN_PROGRESO')}
+                      onCompletar={() => handleAction(trabajoApi.completarTrabajo, trabajo.id, 'COMPLETADO', '¿Confirmas que has completado este trabajo?')}
+                      onReport={() => setReporteModal(trabajo)}
+                    />
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -241,9 +253,6 @@ const TrabajoCardTecnico = ({ trabajo, onChat, onRechazar, onSolicitarVisita, on
     const btnPurple = `${btnBase} bg-purple-600 hover:bg-purple-700 text-white`
     const btnRed = `${btnBase} bg-red-100 hover:bg-red-200 text-red-700`
     const btnGray = `${btnBase} bg-slate-100 hover:bg-slate-200 text-slate-800`
-    const btnAlert = `${btnBase} bg-amber-100 hover:bg-amber-200 text-amber-800`
-
-    const reportButton = <button onClick={onReport} className={btnAlert}><AlertTriangle className="w-4 h-4" /> Reportar</button>
 
     switch (trabajo.estado) {
       case 'PENDIENTE':
@@ -259,36 +268,23 @@ const TrabajoCardTecnico = ({ trabajo, onChat, onRechazar, onSolicitarVisita, on
           <>
             <button onClick={onCotizar} className={btnGreen}><Send className="w-4 h-4" /> Generar Cotización</button>
             <button onClick={onChat} className={btnGray}><MessageSquare className="w-4 h-4" /> Chatear con Cliente</button>
-            {reportButton}
           </>
         )
       case 'COTIZADO':
         return (
-          <>
             <p className="text-sm text-slate-500 font-medium">Esperando aprobación del cliente...</p>
-            {reportButton}
-          </>
         )
       case 'ACEPTADO':
         return (
-          <>
             <button onClick={onIniciar} className={btnPurple}><Wrench className="w-4 h-4" /> Iniciar Trabajo</button>
-            {reportButton}
-          </>
         )
       case 'EN_PROGRESO':
         return (
-          <>
             <button onClick={onCompletar} className={btnGreen}><CheckCircle className="w-4 h-4" /> Completar Trabajo</button>
-            {reportButton}
-          </>
         )
       case 'COMPLETADO':
         return (
-          <>
             <p className="text-sm text-slate-500 font-medium">Trabajo finalizado.</p>
-            {reportButton}
-          </>
         )
       case 'EN_DISPUTA':
         return <p className="text-sm font-semibold text-red-800">Reporte en revisión por un administrador.</p>
@@ -319,7 +315,18 @@ const TrabajoCardTecnico = ({ trabajo, onChat, onRechazar, onSolicitarVisita, on
         <p className="text-sm text-slate-600 mb-5">{trabajo.descripcion}</p>
         {trabajo.precio && <p className="text-sm font-bold text-slate-700">Precio Cotizado: S/ {Number(trabajo.precio).toFixed(2)}</p>}
       </div>
-      <div className="bg-slate-50/80 px-5 sm:px-6 py-3 flex flex-wrap items-center gap-3">{renderActions()}</div>
+      <div className="bg-slate-50/80 px-5 sm:px-6 py-3 flex justify-between items-center gap-3">
+        <div>
+          {['PENDIENTE', 'NECESITA_VISITA', 'COTIZADO', 'ACEPTADO', 'EN_PROGRESO', 'COMPLETADO'].includes(trabajo.estado) && (
+            <button onClick={onReport} className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors bg-amber-100 hover:bg-amber-200 text-amber-800">
+              <AlertTriangle className="w-4 h-4" /> Reportar
+            </button>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          {renderActions()}
+        </div>
+      </div>
     </div>
   )
 }
