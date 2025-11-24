@@ -108,7 +108,7 @@ export default function TrabajosClientPage() { // Renamed from ClienteTrabajosPa
         headers: { 'Authorization': `Bearer ${token}` },
       })
       const data = await response.json()
-      setTrabajos(data.success && ArrayArray.isArray(data.data?.data) ? data.data.data : [])
+      setTrabajos(data.success && Array.isArray(data.data?.data) ? data.data.data : [])
     } catch (error) {
       console.error('Error al cargar trabajos:', error)
       setTrabajos([])
