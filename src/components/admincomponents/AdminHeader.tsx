@@ -2,13 +2,13 @@
 
 import { LogOut, Menu } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { removeStoredUser } from '@/lib/auth'
+import { logout } from '@/lib/auth'
 
 export default function AdminHeader({ onMenuClick, user }: { onMenuClick: () => void; user: any }) {
   const router = useRouter()
 
   const handleLogout = () => {
-    removeStoredUser()
+    logout()
     router.push('/Login')
   }
 
