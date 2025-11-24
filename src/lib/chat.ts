@@ -59,7 +59,7 @@ export const getMessages = async (chatId: string, page = 1, limit = 50) => {
   return result.success ? result.data : result
 }
 
-export const createConversation = async (data: { tecnicoId?: string, adminId?: string }) => {
+export const createConversation = async (data: { tecnicoId?: string, adminId?: string, clienteId?: string }) => {
   const token = getAccessToken()
   const response = await fetch(`${API_URL}/api/chat/conversations`, {
     method: 'POST',

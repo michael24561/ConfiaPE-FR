@@ -5,14 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import HeaderCliente from '@/components/clientecomponents/HeaderCliente'
 import ClienteSidebar from '@/components/clientecomponents/ClienteSidebar'
 import { getStoredUser, getAccessToken } from '@/lib/auth'
-import CalificarTrabajoModal from '@/components/modals/CalificarTrabajoModal'
-import ReportarTrabajoModal from '@/components/modals/ReportarTrabajoModal'
-import {
-  aceptarCotizacion,
-  rechazarCotizacion,
-  cancelarTrabajo,
-} from '@/lib/trabajoApi'
-import { createCheckoutSession } from '@/lib/pagoApi'
+import { crearPreferenciaPago } from '@/lib/mercadopagoApi'
 import {
   Briefcase,
   Calendar,
@@ -162,8 +155,12 @@ export default function ClienteTrabajosPage() {
   const handleAcceptAndPay = async (trabajoId: string) => {
     setPaymentLoading(trabajoId)
     try {
-      const { url } = await createCheckoutSession(trabajoId)
-      window.location.href = url
+      const { init_point } = await crearPreferenciaPago(trabajoId)
+      if (init_point) {
+        window.location.href = init_point
+      } else {
+        throw new Error('No se pudo obtener la URL de pago.')
+      }
     } catch (error: any) {
       alert(`Error al iniciar el pago: ${error.message}`)
       setPaymentLoading(null)

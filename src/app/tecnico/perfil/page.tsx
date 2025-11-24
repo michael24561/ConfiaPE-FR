@@ -5,7 +5,6 @@ import HeaderTecnico from "@/components/tecnicocomponents/HeaderTecnico"
 import TecnicoSidebar from "@/components/tecnicocomponents/TecnicoSidebar"
 import { me, getAccessToken } from "../../../lib/auth"
 import { useRouter } from "next/navigation"
-import StripeConnect from "@/components/StripeConnect";
 import ServiciosManager from "@/components/ServiciosManager";
 
 interface TecnicoProfile {
@@ -727,11 +726,6 @@ export default function PerfilPage() {
             {/* Administrador de Servicios */}
             <div className="mb-6 lg:mb-8">
               <ServiciosManager initialServicios={servicios} />
-            </div>
-
-            {/* Stripe Connect */}
-            <div className="mb-6 lg:mb-8">
-              <StripeConnect />
             </div>
 
             {/* Certificados */}

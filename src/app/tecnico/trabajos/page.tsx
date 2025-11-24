@@ -6,6 +6,7 @@ import HeaderTecnico from '@/components/tecnicocomponents/HeaderTecnico'
 import TecnicoSidebar from '@/components/tecnicocomponents/TecnicoSidebar'
 import { getStoredUser, getAccessToken } from '@/lib/auth'
 import * as trabajoApi from '@/lib/trabajoApi'
+import { createConversation } from '@/lib/chat'
 import ReportarTrabajoModal from '@/components/modals/ReportarTrabajoModal'
 import {
   Briefcase, Calendar, MessageSquare, DollarSign, CheckCircle, XCircle, Clock, Wrench, Eye, Loader2, Send, AlertTriangle,
@@ -51,6 +52,7 @@ export default function TecnicoTrabajosPage() {
   const [filter, setFilter] = useState<string>('todos')
   const [cotizarModal, setCotizarModal] = useState<Trabajo | null>(null)
   const [reporteModal, setReporteModal] = useState<Trabajo | null>(null)
+  const [isCreatingChat, setIsCreatingChat] = useState(false)
   const router = useRouter()
   const { updatedJob } = useNotifications();
 
@@ -130,12 +132,24 @@ export default function TecnicoTrabajosPage() {
     }
   }
 
-  const handleChat = (clienteUserId: string) => {
-    // This is a placeholder. The technician chat page needs to be implemented
-    // to handle conversation creation with a clienteUserId.
-    alert(`Initiating chat with client user ID: ${clienteUserId}`)
-    // router.push(`/tecnico/chat?clienteId=${clienteUserId}`)
-  }
+  const handleChat = async (clienteId: string) => {
+    setIsCreatingChat(true);
+    console.log(`Initiating chat with client ID: ${clienteId}`);
+    try {
+      // Assuming createConversation can be called with a clienteId
+      const chat = await createConversation({ clienteId });
+      if (chat && chat.id) {
+        router.push(`/tecnico/chat?chatId=${chat.id}`);
+      } else {
+        throw new Error('No se pudo obtener el ID del chat.');
+      }
+    } catch (error) {
+      console.error('Error al iniciar el chat:', error);
+      alert('Hubo un error al iniciar el chat. Por favor, inténtalo de nuevo.');
+    } finally {
+      setIsCreatingChat(false);
+    }
+  };
 
   const filterOptions: { value: string; label: string }[] = [
     { value: 'todos', label: 'Todos' },
@@ -189,13 +203,14 @@ export default function TecnicoTrabajosPage() {
                     <TrabajoCardTecnico
                       key={trabajo.id}
                       trabajo={trabajo}
-                      onChat={() => handleChat(trabajo.cliente.userId)}
+                      onChat={() => handleChat(trabajo.cliente.id)}
                       onRechazar={() => handleAction(trabajoApi.rechazarSolicitud, trabajo.id, 'RECHAZADO', '¿Estás seguro de rechazar esta solicitud?')}
                       onSolicitarVisita={() => handleAction(trabajoApi.solicitarVisita, trabajo.id, 'NECESITA_VISITA')}
                       onCotizar={() => setCotizarModal(trabajo)}
                       onIniciar={() => handleAction(trabajoApi.iniciarTrabajo, trabajo.id, 'EN_PROGRESO')}
                       onCompletar={() => handleAction(trabajoApi.completarTrabajo, trabajo.id, 'COMPLETADO', '¿Confirmas que has completado este trabajo?')}
                       onReport={() => setReporteModal(trabajo)}
+                      isCreatingChat={isCreatingChat}
                     />
                   ))}
                 </div>
@@ -228,7 +243,7 @@ export default function TecnicoTrabajosPage() {
 
 // --- Helper Components ---
 
-const TrabajoCardTecnico = ({ trabajo, onChat, onRechazar, onSolicitarVisita, onCotizar, onIniciar, onCompletar, onReport }: any) => {
+const TrabajoCardTecnico = ({ trabajo, onChat, onRechazar, onSolicitarVisita, onCotizar, onIniciar, onCompletar, onReport, isCreatingChat }: any) => {
   const estadoInfo = useMemo(() => {
     const base = 'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold'
     const styles: Record<TrabajoEstado, { style: string; icon: React.ElementType; text: string }> = {
@@ -267,7 +282,13 @@ const TrabajoCardTecnico = ({ trabajo, onChat, onRechazar, onSolicitarVisita, on
         return (
           <>
             <button onClick={onCotizar} className={btnGreen}><Send className="w-4 h-4" /> Generar Cotización</button>
-            <button onClick={onChat} className={btnGray}><MessageSquare className="w-4 h-4" /> Chatear con Cliente</button>
+            <button onClick={onChat} className={btnGray} disabled={isCreatingChat}>
+              {isCreatingChat ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Iniciando...</>
+              ) : (
+                <><MessageSquare className="w-4 h-4" /> Chatear con Cliente</>
+              )}
+            </button>
           </>
         )
       case 'COTIZADO':
@@ -289,7 +310,13 @@ const TrabajoCardTecnico = ({ trabajo, onChat, onRechazar, onSolicitarVisita, on
       case 'EN_DISPUTA':
         return <p className="text-sm font-semibold text-red-800">Reporte en revisión por un administrador.</p>
       default:
-        return <button onClick={onChat} className={btnGray}><MessageSquare className="w-4 h-4" /> Chatear con Cliente</button>
+        return <button onClick={onChat} className={btnGray} disabled={isCreatingChat}>
+          {isCreatingChat ? (
+            <><Loader2 className="w-4 h-4 animate-spin" /> Iniciando...</>
+          ) : (
+            <><MessageSquare className="w-4 h-4" /> Chatear con Cliente</>
+          )}
+        </button>
     }
   }
 
