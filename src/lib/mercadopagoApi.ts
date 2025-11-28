@@ -38,18 +38,6 @@ const mpApiRequest = async (
 };
 
 /**
- * Obtiene la URL de autorización de Mercado Pago para el técnico.
- */
-export const iniciarConexionMercadoPago = () => 
-  mpApiRequest('/mp/oauth/authorize', 'GET');
-
-/**
- * Obtiene el estado de la conexión con Mercado Pago para el técnico.
- */
-export const obtenerEstadoConexion = () => 
-  mpApiRequest('/mp/oauth/status', 'GET');
-
-/**
  * Crea una preferencia de pago para un trabajo y obtiene la URL del checkout.
  * @param trabajoId El ID del trabajo a pagar.
  */

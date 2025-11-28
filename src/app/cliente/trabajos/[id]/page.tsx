@@ -1,19 +1,21 @@
 'use client'
 
 import { useState, useEffect, use } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
-import HeaderTecnico from '@/components/tecnicocomponents/HeaderTecnico'
-import TecnicoSidebar from '@/components/tecnicocomponents/TecnicoSidebar'
+import HeaderCliente from '@/components/clientecomponents/HeaderCliente'
+import ClienteSidebar from '@/components/clientecomponents/ClienteSidebar'
 import { getStoredUser, getAccessToken } from '@/lib/auth'
 import { connectSocket } from '@/lib/socket'
+import { crearPreferenciaPago } from '@/lib/mercadopagoApi'
 import * as trabajoApi from '@/lib/trabajoApi'
 import {
   ChevronLeft, Calendar, MapPin, Clock, DollarSign,
   MessageSquare, AlertTriangle, CheckCircle2, XCircle,
-  Loader2, Eye, Wrench, Send, FileText, User
+  Loader2, CreditCard, Shield, Star, FileText, User
 } from 'lucide-react'
+import CalificarTrabajoModal from '@/components/modals/CalificarTrabajoModal'
 import ReportarTrabajoModal from '@/components/modals/ReportarTrabajoModal'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
@@ -38,15 +40,22 @@ interface Trabajo {
   precio: number | null
   fechaSolicitud: string
   fechaProgramada: string | null
-  cliente: {
+  tecnico: {
     id: string
-    userId: string
+    nombres: string
+    apellidos: string
+    oficio: string
+    telefono: string
     user: {
-      nombre: string
+      userId: string
       avatarUrl: string | null
-      email: string
     }
   }
+  calificacion: {
+    id: string
+    puntuacion: number
+    comentario: string
+  } | null
 }
 
 export default function TrabajoDetallePage({ params }: { params: Promise<{ id: string }> }) {
@@ -58,15 +67,16 @@ export default function TrabajoDetallePage({ params }: { params: Promise<{ id: s
   const [actionLoading, setActionLoading] = useState(false)
 
   // Modals
-  const [cotizarModalOpen, setCotizarModalOpen] = useState(false)
+  const [calificarModalOpen, setCalificarModalOpen] = useState(false)
   const [reportarModalOpen, setReportarModalOpen] = useState(false)
 
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   // --- Auth & Initial Fetch ---
   useEffect(() => {
     const storedUser = getStoredUser()
-    if (!storedUser || storedUser.rol !== 'TECNICO') {
+    if (!storedUser || storedUser.rol !== 'CLIENTE') {
       router.push('/Login')
       return
     }
@@ -90,6 +100,20 @@ export default function TrabajoDetallePage({ params }: { params: Promise<{ id: s
     }
   }, [id])
 
+  // --- Payment Status Check ---
+  useEffect(() => {
+    const pagoStatus = searchParams.get('pago')
+    if (pagoStatus === 'exitoso') {
+      // Clear param to avoid re-alerting
+      router.replace(`/cliente/trabajos/${id}`)
+      alert('¡Pago realizado con éxito! El trabajo ha sido aceptado.')
+      fetchTrabajo()
+    } else if (pagoStatus === 'cancelado') {
+      router.replace(`/cliente/trabajos/${id}`)
+      alert('El proceso de pago fue cancelado.')
+    }
+  }, [searchParams, id, router])
+
   const fetchTrabajo = async () => {
     try {
       const token = getAccessToken()
@@ -110,6 +134,20 @@ export default function TrabajoDetallePage({ params }: { params: Promise<{ id: s
   }
 
   // --- Actions ---
+  const handlePayment = async () => {
+    if (!trabajo) return
+    setActionLoading(true)
+    try {
+      const checkoutUrl = await crearPreferenciaPago(trabajo.id)
+      if (checkoutUrl) window.location.href = checkoutUrl
+    } catch (error) {
+      console.error('Error initiating payment:', error)
+      alert('Error al iniciar el pago. Intente nuevamente.')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
   const handleAction = async (actionFn: (id: string) => Promise<any>, confirmMsg?: string) => {
     if (confirmMsg && !confirm(confirmMsg)) return
     setActionLoading(true)
@@ -124,23 +162,9 @@ export default function TrabajoDetallePage({ params }: { params: Promise<{ id: s
     }
   }
 
-  const handleProponerCotizacion = async (precio: number) => {
-    setActionLoading(true)
-    try {
-      await trabajoApi.proponerCotizacion(id, precio)
-      fetchTrabajo()
-      setCotizarModalOpen(false)
-    } catch (error: any) {
-      console.error('Error proposing quote:', error)
-      alert(`Error: ${error.message}`)
-    } finally {
-      setActionLoading(false)
-    }
-  }
-
   const handleChat = () => {
-    if (trabajo?.cliente?.id) {
-      router.push(`/tecnico/chat?clienteId=${trabajo.cliente.id}`)
+    if (trabajo?.tecnico?.id) {
+      router.push(`/cliente/chat?tecnicoId=${trabajo.tecnico.id}`)
     }
   }
 
@@ -157,7 +181,7 @@ export default function TrabajoDetallePage({ params }: { params: Promise<{ id: s
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
           <h2 className="text-2xl font-bold text-slate-800">Trabajo no encontrado</h2>
-          <Link href="/tecnico/trabajos" className="text-blue-600 hover:underline mt-4 block">
+          <Link href="/cliente/trabajos" className="text-blue-600 hover:underline mt-4 block">
             Volver a mis trabajos
           </Link>
         </div>
@@ -167,17 +191,17 @@ export default function TrabajoDetallePage({ params }: { params: Promise<{ id: s
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">
-      <HeaderTecnico onMenuClick={() => setSidebarOpen(!sidebarOpen)} onNotificationClick={() => { }} notifications={[]} user={user} />
+      <HeaderCliente onMenuClick={() => setSidebarOpen(!sidebarOpen)} onNotificationClick={() => { }} notifications={[]} user={user} />
 
       <div className="flex relative">
-        <TecnicoSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} onToggle={() => setSidebarOpen(!sidebarOpen)} />
+        <ClienteSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
         <main className={`flex-1 pt-20 transition-all duration-300 ${sidebarOpen ? 'lg:ml-72' : 'lg:ml-0'}`}>
           <div className="px-4 sm:px-8 py-8 max-w-6xl mx-auto">
 
             {/* Breadcrumb */}
             <div className="mb-6">
-              <Link href="/tecnico/trabajos" className="inline-flex items-center gap-2 text-slate-500 hover:text-blue-600 transition-colors font-medium">
+              <Link href="/cliente/trabajos" className="inline-flex items-center gap-2 text-slate-500 hover:text-blue-600 transition-colors font-medium">
                 <ChevronLeft className="w-4 h-4" /> Volver a Mis Trabajos
               </Link>
             </div>
@@ -233,20 +257,23 @@ export default function TrabajoDetallePage({ params }: { params: Promise<{ id: s
                   </div>
                 </div>
 
-                {/* Client Card */}
+                {/* Technician Card */}
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 p-6 flex items-center gap-5">
                   <div className="relative w-16 h-16 rounded-full bg-slate-100 overflow-hidden flex-shrink-0 border border-slate-200">
-                    {trabajo.cliente.user.avatarUrl ? (
-                      <Image src={trabajo.cliente.user.avatarUrl} alt={trabajo.cliente.user.nombre} fill className="object-cover" />
+                    {trabajo.tecnico.user.avatarUrl ? (
+                      <Image src={trabajo.tecnico.user.avatarUrl} alt={trabajo.tecnico.nombres} fill className="object-cover" />
                     ) : (
                       <User className="w-8 h-8 text-slate-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
                     )}
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-lg font-bold text-slate-900">{trabajo.cliente.user.nombre}</h3>
-                    <p className="text-blue-600 font-medium">Cliente</p>
-                    <p className="text-sm text-slate-500 mt-1">{trabajo.cliente.user.email}</p>
+                    <h3 className="text-lg font-bold text-slate-900">{trabajo.tecnico.nombres} {trabajo.tecnico.apellidos}</h3>
+                    <p className="text-blue-600 font-medium">{trabajo.tecnico.oficio}</p>
+                    <p className="text-sm text-slate-500 mt-1">{trabajo.tecnico.telefono}</p>
                   </div>
+                  <Link href={`/cliente/tecnicos/${trabajo.tecnico.id}`} className="px-4 py-2 border border-slate-200 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">
+                    Ver Perfil
+                  </Link>
                 </div>
 
               </div>
@@ -264,27 +291,25 @@ export default function TrabajoDetallePage({ params }: { params: Promise<{ id: s
 
                       {/* Chat is almost always available */}
                       <button onClick={handleChat} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-slate-100 text-slate-700 font-semibold rounded-xl hover:bg-slate-200 transition-colors">
-                        <MessageSquare className="w-5 h-5" /> Chat con Cliente
+                        <MessageSquare className="w-5 h-5" /> Chat con Técnico
                       </button>
 
-                      {trabajo.estado === 'PENDIENTE' && (
+                      {trabajo.estado === 'COTIZADO' && (
                         <div className="space-y-3 pt-2">
+                          <div className="bg-orange-50 border border-orange-100 p-4 rounded-xl text-center mb-2">
+                            <p className="text-sm text-orange-600 font-semibold uppercase tracking-wide">Cotización Recibida</p>
+                            <p className="text-3xl font-bold text-orange-900 mt-1">S/ {Number(trabajo.precio).toFixed(2)}</p>
+                          </div>
                           <button
-                            onClick={() => setCotizarModalOpen(true)}
+                            onClick={handlePayment}
                             disabled={actionLoading}
-                            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50"
+                            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 transition-colors disabled:opacity-50"
                           >
-                            <DollarSign className="w-5 h-5" /> Cotizar Directo
+                            {actionLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <CreditCard className="w-5 h-5" />}
+                            Aceptar y Pagar
                           </button>
                           <button
-                            onClick={() => handleAction(trabajoApi.solicitarVisita)}
-                            disabled={actionLoading}
-                            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-cyan-600 text-white font-semibold rounded-xl hover:bg-cyan-700 transition-colors disabled:opacity-50"
-                          >
-                            <Eye className="w-5 h-5" /> Agendar Visita
-                          </button>
-                          <button
-                            onClick={() => handleAction(trabajoApi.rechazarSolicitud, '¿Estás seguro de rechazar esta solicitud?')}
+                            onClick={() => handleAction(trabajoApi.rechazarCotizacion, '¿Seguro que deseas rechazar esta cotización?')}
                             disabled={actionLoading}
                             className="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-red-100 text-red-600 font-semibold rounded-xl hover:bg-red-50 transition-colors"
                           >
@@ -293,62 +318,27 @@ export default function TrabajoDetallePage({ params }: { params: Promise<{ id: s
                         </div>
                       )}
 
-                      {trabajo.estado === 'NECESITA_VISITA' && (
-                        <div className="space-y-3 pt-2">
-                          <button
-                            onClick={() => setCotizarModalOpen(true)}
-                            disabled={actionLoading}
-                            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 transition-colors disabled:opacity-50"
-                          >
-                            <Send className="w-5 h-5" /> Generar Cotización
-                          </button>
-                        </div>
-                      )}
-
-                      {trabajo.estado === 'COTIZADO' && (
-                        <div className="bg-orange-50 border border-orange-100 p-4 rounded-xl text-center">
-                          <p className="text-sm text-orange-600 font-semibold uppercase tracking-wide">Cotización Enviada</p>
-                          <p className="text-3xl font-bold text-orange-900 mt-1">S/ {Number(trabajo.precio).toFixed(2)}</p>
-                          <p className="text-xs text-orange-600 mt-2">Esperando aprobación del cliente...</p>
-                        </div>
-                      )}
-
-                      {trabajo.estado === 'ACEPTADO' && (
+                      {trabajo.estado === 'PENDIENTE' && (
                         <button
-                          onClick={() => handleAction(trabajoApi.iniciarTrabajo)}
+                          onClick={() => handleAction(trabajoApi.cancelarTrabajo, '¿Seguro que deseas cancelar esta solicitud?')}
                           disabled={actionLoading}
-                          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 text-white font-semibold rounded-xl hover:bg-purple-700 transition-colors disabled:opacity-50"
+                          className="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-red-100 text-red-600 font-semibold rounded-xl hover:bg-red-50 transition-colors"
                         >
-                          <Wrench className="w-5 h-5" /> Iniciar Trabajo
+                          Cancelar Solicitud
                         </button>
                       )}
 
-                      {trabajo.estado === 'EN_PROGRESO' && (
+                      {trabajo.estado === 'COMPLETADO' && !trabajo.calificacion && (
                         <button
-                          onClick={() => handleAction(trabajoApi.completarTrabajo, '¿Confirmas que has completado este trabajo?')}
-                          disabled={actionLoading}
-                          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 transition-colors disabled:opacity-50"
+                          onClick={() => setCalificarModalOpen(true)}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-yellow-400 text-yellow-950 font-bold rounded-xl hover:bg-yellow-500 transition-colors"
                         >
-                          <CheckCircle2 className="w-5 h-5" /> Completar Trabajo
+                          <Star className="w-5 h-5" /> Calificar Trabajo
                         </button>
-                      )}
-
-                      {trabajo.estado === 'COMPLETADO' && (
-                        <div className="bg-green-50 border border-green-100 p-4 rounded-xl text-center">
-                          <CheckCircle2 className="w-8 h-8 text-green-600 mx-auto mb-2" />
-                          <p className="text-sm text-green-700 font-semibold">Trabajo finalizado</p>
-                        </div>
-                      )}
-
-                      {trabajo.estado === 'EN_DISPUTA' && (
-                        <div className="bg-red-50 border border-red-100 p-4 rounded-xl text-center">
-                          <AlertTriangle className="w-8 h-8 text-red-600 mx-auto mb-2" />
-                          <p className="text-sm text-red-700 font-semibold">Reporte en revisión por un administrador</p>
-                        </div>
                       )}
 
                       {/* Report Button (Available in active states) */}
-                      {['PENDIENTE', 'NECESITA_VISITA', 'COTIZADO', 'ACEPTADO', 'EN_PROGRESO', 'COMPLETADO'].includes(trabajo.estado) && (
+                      {['PENDIENTE', 'COTIZADO', 'ACEPTADO', 'EN_PROGRESO'].includes(trabajo.estado) && (
                         <button
                           onClick={() => setReportarModalOpen(true)}
                           className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-slate-400 hover:text-red-600 transition-colors mt-4"
@@ -356,6 +346,19 @@ export default function TrabajoDetallePage({ params }: { params: Promise<{ id: s
                           <AlertTriangle className="w-4 h-4" /> Reportar Problema
                         </button>
                       )}
+                    </div>
+                  </div>
+
+                  {/* Help Card */}
+                  <div className="bg-blue-50 rounded-2xl p-6 border border-blue-100">
+                    <div className="flex items-start gap-3">
+                      <Shield className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                      <div>
+                        <h4 className="font-bold text-blue-900 text-sm">Garantía ConfiaPE</h4>
+                        <p className="text-xs text-blue-700 mt-1 leading-relaxed">
+                          Tu pago está protegido hasta que el trabajo se complete. Si tienes problemas, nuestro equipo de soporte te ayudará.
+                        </p>
+                      </div>
                     </div>
                   </div>
 
@@ -370,21 +373,19 @@ export default function TrabajoDetallePage({ params }: { params: Promise<{ id: s
       {/* Modals */}
       {trabajo && (
         <>
-          <CotizarModal
-            isOpen={cotizarModalOpen}
-            onClose={() => setCotizarModalOpen(false)}
+          <CalificarTrabajoModal
+            isOpen={calificarModalOpen}
+            onClose={() => setCalificarModalOpen(false)}
             trabajo={trabajo}
-            onSubmit={handleProponerCotizacion}
-            loading={actionLoading}
+            onSuccess={() => {
+              fetchTrabajo()
+              setCalificarModalOpen(false)
+            }}
           />
           <ReportarTrabajoModal
             isOpen={reportarModalOpen}
             onClose={() => setReportarModalOpen(false)}
-            trabajoId={trabajo.id}
-            onSuccess={() => {
-              fetchTrabajo()
-              setReportarModalOpen(false)
-            }}
+            trabajo={trabajo}
           />
         </>
       )}
@@ -437,6 +438,7 @@ const JobTimeline = ({ estado }: { estado: TrabajoEstado }) => {
   ]
 
   // Determine current step index
+  // Note: This is a linear simplification. Real flows might branch (e.g. Needs Visit).
   let currentIndex = -1
   if (estado === 'PENDIENTE' || estado === 'NECESITA_VISITA') currentIndex = 0
   if (estado === 'COTIZADO') currentIndex = 1
@@ -476,61 +478,6 @@ const JobTimeline = ({ estado }: { estado: TrabajoEstado }) => {
             </div>
           )
         })}
-      </div>
-    </div>
-  )
-}
-
-const CotizarModal = ({ isOpen, onClose, trabajo, onSubmit, loading }: any) => {
-  const [precio, setPrecio] = useState('')
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const priceValue = parseFloat(precio)
-    if (!priceValue || priceValue <= 0) {
-      alert('Por favor, ingresa un precio válido.')
-      return
-    }
-    await onSubmit(priceValue)
-    setPrecio('')
-  }
-
-  if (!isOpen) return null
-
-  return (
-    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
-        <form onSubmit={handleSubmit}>
-          <div className="p-6 border-b border-slate-200">
-            <h2 className="text-xl font-bold text-slate-800">Proponer Cotización</h2>
-            <p className="text-sm text-slate-500 mt-1">Servicio: {trabajo.servicioNombre}</p>
-          </div>
-          <div className="p-6">
-            <label htmlFor="precio" className="block text-sm font-medium text-slate-700 mb-2">Precio (S/)</label>
-            <div className="relative">
-              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-              <input
-                type="number"
-                id="precio"
-                value={precio}
-                onChange={(e) => setPrecio(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Ej: 150.00"
-                step="0.01"
-                min="0"
-                required
-                autoFocus
-              />
-            </div>
-          </div>
-          <div className="p-6 bg-slate-50 rounded-b-2xl flex justify-end items-center gap-3">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-semibold text-slate-700 rounded-lg hover:bg-slate-200">Cancelar</button>
-            <button type="submit" disabled={loading} className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
-              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-              Enviar Cotización
-            </button>
-          </div>
-        </form>
       </div>
     </div>
   )

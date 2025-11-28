@@ -75,7 +75,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
 
       socket.on('trabajo:estado_actualizado', (job: any) => {
         toast.success(`El estado del trabajo "${job.servicioNombre}" ha sido actualizado a: ${job.estado}`);
-        setUpdatedJob(job);
+        setUpdatedJob({ ...job, _timestamp: Date.now() }); // Add timestamp to force update
       });
 
       socket.on('disconnect', () => {
@@ -94,30 +94,30 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
 
     const token = getAccessToken();
     try {
-        await fetch(`${API_URL}/api/notificaciones/${notificationId}/leida`, {
-            method: 'PATCH',
-            headers: { 'Authorization': `Bearer ${token}` },
-        });
-        setNotifications(prev =>
-            prev.map(n => (n.id === notificationId ? { ...n, leida: true } : n))
-        );
-        setUnreadCount(prev => (prev > 0 ? prev - 1 : 0));
+      await fetch(`${API_URL}/api/notificaciones/${notificationId}/leida`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      setNotifications(prev =>
+        prev.map(n => (n.id === notificationId ? { ...n, leida: true } : n))
+      );
+      setUnreadCount(prev => (prev > 0 ? prev - 1 : 0));
     } catch (error) {
-        console.error("Error marking notification as read", error);
+      console.error("Error marking notification as read", error);
     }
   };
 
   const markAllAsRead = async () => {
     const token = getAccessToken();
     try {
-        await fetch(`${API_URL}/api/notificaciones/leidas`, {
-            method: 'PATCH',
-            headers: { 'Authorization': `Bearer ${token}` },
-        });
-        setNotifications(prev => prev.map(n => ({ ...n, leida: true })));
-        setUnreadCount(0);
+      await fetch(`${API_URL}/api/notificaciones/leidas`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      setNotifications(prev => prev.map(n => ({ ...n, leida: true })));
+      setUnreadCount(0);
     } catch (error) {
-        console.error("Error marking all notifications as read", error);
+      console.error("Error marking all notifications as read", error);
     }
   };
 

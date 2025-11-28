@@ -4,11 +4,52 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { getStoredUser, getAccessToken } from '@/lib/auth'
 import Link from 'next/link'
+import {
+  Users,
+  Briefcase,
+  DollarSign,
+  TrendingUp,
+  AlertCircle,
+  CheckCircle,
+  Clock,
+  Activity
+} from 'lucide-react'
+import {
+  LineChart,
+  Line,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend
+} from 'recharts'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
+interface Stats {
+  totales: {
+    tecnicos: number
+    clientes: number
+    trabajos: number
+    ingresosPlataforma: number
+    tecnicosVerificados: number
+    trabajosPendientes: number
+    disputasAbiertas: number
+  }
+  series: {
+    trabajosPorDia: Array<{ fecha: string; valor: number }>
+    usuariosPorDia: Array<{ fecha: string; valor: number }>
+    ingresosPorDia: Array<{ fecha: string; valor: number }>
+  }
+}
+
 export default function AdminDashboard() {
-  const [stats, setStats] = useState<any>(null)
+  const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
@@ -18,9 +59,8 @@ export default function AdminDashboard() {
       const storedUser = getStoredUser()
       if (!storedUser || storedUser.rol !== 'ADMIN') {
         router.push('/Login')
-        return;
+        return
       }
-      // setUser(storedUser) // Removed as user is not directly used in this component
 
       try {
         const token = getAccessToken()
@@ -47,20 +87,35 @@ export default function AdminDashboard() {
     checkUserAndFetchStats()
   }, [router])
 
-  const StatCard = ({ title, value, icon, color, link }: { title: string, value: number, icon: React.ReactNode, color: string, link: string }) => (
+  const StatCard = ({
+    title,
+    value,
+    icon: Icon,
+    color,
+    link,
+    subtitle
+  }: {
+    title: string
+    value: number | string
+    icon: any
+    color: string
+    link: string
+    subtitle?: string
+  }) => (
     <Link href={link}>
-      <div className={`bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-200 h-full`}>
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/60 hover:shadow-md transition-all duration-200 h-full">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium text-gray-500">{title}</p>
-            <p className="text-3xl font-bold text-gray-800 mt-1">{value}</p>
+            <p className="text-sm font-medium text-slate-500">{title}</p>
+            <p className="text-3xl font-bold text-slate-800 mt-1">{value}</p>
+            {subtitle && <p className="text-xs text-slate-400 mt-1">{subtitle}</p>}
           </div>
-          <div className={`p-3 rounded-full ${color} bg-opacity-10`}>
-            {icon}
+          <div className={`p-3 rounded-xl ${color} bg-opacity-10`}>
+            <Icon className={`w-6 h-6 ${color.replace('bg-', 'text-')}`} />
           </div>
         </div>
         <div className="mt-4">
-          <span className="text-sm text-blue-600 font-medium hover:underline">Ver detalles</span>
+          <span className="text-sm text-blue-600 font-medium hover:underline">Ver detalles →</span>
         </div>
       </div>
     </Link>
@@ -76,21 +131,16 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-xl shadow-sm">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Panel de Administración</h1>
-          <p className="text-gray-600">Bienvenido al panel de control de ConfíaPE</p>
-        </div>
+      {/* Header */}
+      <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-8 rounded-2xl shadow-lg text-white">
+        <h1 className="text-3xl font-bold">Panel de Administración</h1>
+        <p className="text-blue-100 mt-2">Bienvenido al centro de comando de ConfiaPE</p>
       </div>
 
       {error && (
-        <div className="bg-red-50 border-l-4 border-red-500 p-4">
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg">
           <div className="flex">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-            </div>
+            <AlertCircle className="h-5 w-5 text-red-500" />
             <div className="ml-3">
               <p className="text-sm text-red-700">{error}</p>
             </div>
@@ -99,60 +149,214 @@ export default function AdminDashboard() {
       )}
 
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <StatCard 
-            title="Técnicos" 
-            value={stats.tecnicos} 
-            icon={
-              <svg className="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
-            }
-            color="bg-blue-100"
-            link="/admin/tecnicos"
-          />
-          <StatCard 
-            title="Clientes" 
-            value={stats.clientes} 
-            icon={
-              <svg className="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-              </svg>
-            }
-            color="bg-green-100"
-            link="/admin/clientes"
-          />
-          <StatCard 
-            title="Trabajos" 
-            value={stats.trabajos} 
-            icon={
-              <svg className="h-6 w-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-            }
-            color="bg-yellow-100"
-            link="/admin/trabajos"
-          />
-          <StatCard 
-            title="Ingresos Plataforma" 
-            value={stats.ingresosPlataforma.toFixed(2)} 
-            icon={
-              <svg className="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0h-1.583m1.583 0h1.583m-1.583 0C9.301 16 7 14.236 7 12c0-2.113 2.166-3.843 4.5-4.175M12 18v-1M12 18h.01" />
-              </svg>
-            }
-            color="bg-green-100"
-            link="#"
-          />
-        </div>
-      )}
+        <>
+          {/* Stats Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <StatCard
+              title="Técnicos"
+              value={stats.totales.tecnicos}
+              icon={Users}
+              color="bg-blue-500"
+              link="/admin/tecnicos"
+              subtitle={`${stats.totales.tecnicosVerificados} verificados`}
+            />
+            <StatCard
+              title="Clientes"
+              value={stats.totales.clientes}
+              icon={Users}
+              color="bg-green-500"
+              link="/admin/clientes"
+            />
+            <StatCard
+              title="Trabajos"
+              value={stats.totales.trabajos}
+              icon={Briefcase}
+              color="bg-yellow-500"
+              link="/admin/trabajos"
+              subtitle={`${stats.totales.trabajosPendientes} pendientes`}
+            />
+            <StatCard
+              title="Ingresos Plataforma"
+              value={`S/ ${stats.totales.ingresosPlataforma.toFixed(2)}`}
+              icon={DollarSign}
+              color="bg-emerald-500"
+              link="#"
+            />
+          </div>
 
-      <div className="bg-white p-6 rounded-xl shadow-sm mt-6">
-        <h2 className="text-xl font-semibold text-gray-800 mb-4">Actividad Reciente</h2>
-        <div className="border-t border-gray-100 pt-4">
-          <p className="text-gray-600 text-center py-8">Próximamente: Actividad reciente del sistema</p>
-        </div>
-      </div>
+          {/* Action Required Panel */}
+          {(stats.totales.disputasAbiertas > 0 || stats.totales.trabajosPendientes > 0) && (
+            <div className="bg-amber-50 border-l-4 border-amber-500 p-6 rounded-lg">
+              <div className="flex items-start">
+                <AlertCircle className="h-6 w-6 text-amber-600 mt-0.5" />
+                <div className="ml-4 flex-1">
+                  <h3 className="text-lg font-semibold text-amber-900">Acción Requerida</h3>
+                  <div className="mt-2 space-y-2">
+                    {stats.totales.disputasAbiertas > 0 && (
+                      <Link href="/admin/reportes" className="block text-amber-800 hover:text-amber-900">
+                        • <span className="font-medium">{stats.totales.disputasAbiertas}</span> disputa(s) abierta(s) requieren atención
+                      </Link>
+                    )}
+                    {stats.totales.trabajosPendientes > 0 && (
+                      <Link href="/admin/trabajos" className="block text-amber-800 hover:text-amber-900">
+                        • <span className="font-medium">{stats.totales.trabajosPendientes}</span> trabajo(s) pendiente(s) de revisión
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Charts Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Users Growth Chart */}
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/60">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold text-slate-800">Nuevos Usuarios (30 días)</h3>
+                <TrendingUp className="w-5 h-5 text-blue-500" />
+              </div>
+              <ResponsiveContainer width="100%" height={300}>
+                <AreaChart data={stats.series.usuariosPorDia}>
+                  <defs>
+                    <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis
+                    dataKey="fecha"
+                    tick={{ fontSize: 12 }}
+                    tickFormatter={(value) => new Date(value).getDate().toString()}
+                  />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#fff',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px'
+                    }}
+                    labelFormatter={(value) => new Date(value).toLocaleDateString()}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="valor"
+                    stroke="#3b82f6"
+                    fillOpacity={1}
+                    fill="url(#colorUsers)"
+                    name="Usuarios"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Jobs Chart */}
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/60">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold text-slate-800">Trabajos Solicitados (30 días)</h3>
+                <Activity className="w-5 h-5 text-yellow-500" />
+              </div>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={stats.series.trabajosPorDia}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis
+                    dataKey="fecha"
+                    tick={{ fontSize: 12 }}
+                    tickFormatter={(value) => new Date(value).getDate().toString()}
+                  />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#fff',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px'
+                    }}
+                    labelFormatter={(value) => new Date(value).toLocaleDateString()}
+                  />
+                  <Bar dataKey="valor" fill="#eab308" radius={[8, 8, 0, 0]} name="Trabajos" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Revenue Chart */}
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/60 lg:col-span-2">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold text-slate-800">Ingresos de la Plataforma (30 días)</h3>
+                <DollarSign className="w-5 h-5 text-emerald-500" />
+              </div>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={stats.series.ingresosPorDia}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis
+                    dataKey="fecha"
+                    tick={{ fontSize: 12 }}
+                    tickFormatter={(value) => new Date(value).getDate().toString()}
+                  />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#fff',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px'
+                    }}
+                    labelFormatter={(value) => new Date(value).toLocaleDateString()}
+                    formatter={(value: any) => [`S/ ${value.toFixed(2)}`, 'Ingresos']}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="valor"
+                    stroke="#10b981"
+                    strokeWidth={2}
+                    dot={{ fill: '#10b981', r: 4 }}
+                    activeDot={{ r: 6 }}
+                    name="Ingresos"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Quick Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/60">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-blue-100 rounded-xl">
+                  <CheckCircle className="w-6 h-6 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-slate-500">Técnicos Verificados</p>
+                  <p className="text-2xl font-bold text-slate-800">{stats.totales.tecnicosVerificados}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/60">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-yellow-100 rounded-xl">
+                  <Clock className="w-6 h-6 text-yellow-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-slate-500">Trabajos Pendientes</p>
+                  <p className="text-2xl font-bold text-slate-800">{stats.totales.trabajosPendientes}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/60">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-red-100 rounded-xl">
+                  <AlertCircle className="w-6 h-6 text-red-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-slate-500">Disputas Abiertas</p>
+                  <p className="text-2xl font-bold text-slate-800">{stats.totales.disputasAbiertas}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

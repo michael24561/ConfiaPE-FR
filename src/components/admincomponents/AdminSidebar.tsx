@@ -16,6 +16,7 @@ import Image from 'next/image'
 
 const navItems = [
   { href: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
+  { href: '/admin/users', icon: Users, label: 'Usuarios' },
   { href: '/admin/tecnicos', icon: Users, label: 'Técnicos' },
   { href: '/admin/clientes', icon: Users, label: 'Clientes' },
   { href: '/admin/trabajos', icon: Briefcase, label: 'Trabajos' },
@@ -30,9 +31,8 @@ export default function AdminSidebar({ isOpen, onClose, onToggle }: { isOpen: bo
     <>
       {/* Overlay for mobile */}
       <div
-        className={`fixed inset-0 bg-slate-900 bg-opacity-30 z-30 lg:hidden lg:z-auto transition-opacity duration-200 ${
-          isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
-        }`}
+        className={`fixed inset-0 bg-slate-900 bg-opacity-30 z-30 lg:hidden lg:z-auto transition-opacity duration-200 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+          }`}
         aria-hidden="true"
         onClick={onClose}
       ></div>
@@ -40,9 +40,8 @@ export default function AdminSidebar({ isOpen, onClose, onToggle }: { isOpen: bo
       {/* Sidebar */}
       <div
         id="sidebar"
-        className={`flex flex-col fixed z-40 left-0 top-0 h-screen overflow-y-auto w-72 shrink-0 bg-slate-800 p-4 transition-all duration-200 ease-in-out ${
-          isOpen ? 'translate-x-0' : '-translate-x-72 lg:translate-x-0' // Keep it open on large screens
-        }`}
+        className={`flex flex-col fixed z-40 left-0 top-0 h-screen overflow-y-auto w-72 shrink-0 bg-slate-800 p-4 transition-all duration-200 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-72 lg:translate-x-0' // Keep it open on large screens
+          }`}
       >
         {/* Sidebar header */}
         <div className="flex justify-between mb-10 pr-3 sm:px-2">

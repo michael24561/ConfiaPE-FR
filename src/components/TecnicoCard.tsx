@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { Star, ShieldCheck, MapPin, Heart } from 'lucide-react'
+import { Star, ShieldCheck, MapPin, Heart, Layers } from 'lucide-react'
 import { getAccessToken } from '@/lib/auth'
 import { useState } from 'react'
 
@@ -22,16 +22,18 @@ interface TecnicoCardProps {
     esFavorito?: boolean
     ubicacion?: string | null
   }
+  isSelected?: boolean
+  onToggleCompare?: () => void
 }
 
-export default function TecnicoCard({ tecnico }: TecnicoCardProps) {
+export default function TecnicoCard({ tecnico, isSelected, onToggleCompare }: TecnicoCardProps) {
   const [isFavorite, setIsFavorite] = useState(tecnico.esFavorito || false)
   const [isProcessingFavorite, setIsProcessingFavorite] = useState(false)
 
   const handleFavoriteToggle = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    
+
     if (isProcessingFavorite) return
     setIsProcessingFavorite(true)
 
@@ -58,13 +60,19 @@ export default function TecnicoCard({ tecnico }: TecnicoCardProps) {
     }
   }
 
+  const handleCompareClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    onToggleCompare?.()
+  }
+
   const rating = Number(tecnico.calificacionPromedio || 0)
 
   return (
-    <Link href={`/cliente/tecnicos/${tecnico.id}`} className="block group">
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 h-full flex flex-col overflow-hidden transition-all duration-300 group-hover:shadow-lg group-hover:-translate-y-1 group-hover:border-blue-500/50">
+    <Link href={`/cliente/tecnicos/${tecnico.id}`} className="block group h-full">
+      <div className={`bg-white rounded-2xl shadow-sm border h-full flex flex-col overflow-hidden transition-all duration-300 group-hover:shadow-lg group-hover:-translate-y-1 ${isSelected ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-slate-200/80 group-hover:border-blue-500/50'}`}>
         <div className={`h-1.5 ${tecnico.disponible ? 'bg-green-500' : 'bg-slate-300'}`}></div>
-        
+
         <div className="p-5 flex flex-col flex-grow">
           <div className="flex items-start gap-4 mb-4">
             <div className="relative w-16 h-16 rounded-full overflow-hidden bg-slate-200 flex-shrink-0">
@@ -86,9 +94,11 @@ export default function TecnicoCard({ tecnico }: TecnicoCardProps) {
                 </div>
               )}
             </div>
-            <button onClick={handleFavoriteToggle} className={`transition-colors duration-200 ${isProcessingFavorite ? 'opacity-50' : ''}`}>
-              <Heart className={`w-6 h-6 ${isFavorite ? 'text-red-500 fill-current' : 'text-slate-400 hover:text-red-500'}`} />
-            </button>
+            <div className="flex flex-col gap-2">
+              <button onClick={handleFavoriteToggle} className={`transition-colors duration-200 ${isProcessingFavorite ? 'opacity-50' : ''}`}>
+                <Heart className={`w-6 h-6 ${isFavorite ? 'text-red-500 fill-current' : 'text-slate-400 hover:text-red-500'}`} />
+              </button>
+            </div>
           </div>
 
           {tecnico.descripcion && (
@@ -109,6 +119,24 @@ export default function TecnicoCard({ tecnico }: TecnicoCardProps) {
                 </div>
               )}
             </div>
+
+            {/* Compare Toggle */}
+            {onToggleCompare && (
+              <div className="pt-3 border-t border-slate-100 flex justify-end">
+                <button
+                  onClick={handleCompareClick}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${isSelected
+                      ? 'bg-blue-50 text-blue-700'
+                      : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+                    }`}
+                >
+                  <div className={`w-4 h-4 rounded border flex items-center justify-center ${isSelected ? 'bg-blue-600 border-blue-600' : 'border-slate-300 bg-white'}`}>
+                    {isSelected && <Layers className="w-2.5 h-2.5 text-white" />}
+                  </div>
+                  Comparar
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

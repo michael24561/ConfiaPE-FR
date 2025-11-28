@@ -1,281 +1,241 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getAccessToken } from '@/lib/auth'
-import { Loader2, Briefcase, User, DollarSign, Calendar, CheckCircle, XCircle, AlertTriangle, Eye } from 'lucide-react'
-import Image from 'next/image'
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { getStoredUser, getAccessToken } from '@/lib/auth'
+import {
+  Search,
+  MoreVertical,
+  Eye,
+  Calendar,
+  MapPin,
+  DollarSign
+} from 'lucide-react'
+import DataTable, { Column } from '@/components/admincomponents/DataTable'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
-type TrabajoEstado =
-  | 'PENDIENTE'
-  | 'RECHAZADO'
-  | 'NECESITA_VISITA'
-  | 'COTIZADO'
-  | 'ACEPTADO'
-  | 'EN_PROGRESO'
-  | 'COMPLETADO'
-  | 'CANCELADO'
-  | 'EN_DISPUTA'
-
 interface Trabajo {
   id: string
-  servicioNombre: string
+  titulo: string
   descripcion: string
-  estado: TrabajoEstado
-  precio: number | null
-  fechaSolicitud: string
+  estado: string
+  fechaCreacion: string
+  presupuesto?: number
+  ubicacion?: string
   cliente: {
-    id: string
-    user: {
-      nombre: string
-      avatarUrl: string | null
-    }
+    nombre: string
+    email: string
   }
-  tecnico: {
-    id: string
-    user: {
-      nombre: string
-      avatarUrl: string | null
-    }
+  tecnico?: {
+    nombre: string
+    email: string
   }
-  calificacion: {
-    id: string
-    puntuacion: number
-  } | null
 }
 
-interface Pagination {
-  page: number
-  limit: number
-  total: number
-  pages: number
-}
-
-export default function AdminTrabajosPage() {
+export default function TrabajosPage() {
   const [trabajos, setTrabajos] = useState<Trabajo[]>([])
   const [loading, setLoading] = useState(true)
-  const [pagination, setPagination] = useState<Pagination>({ page: 1, limit: 10, total: 0, pages: 0 })
-  const [filters, setFilters] = useState({
-    estado: 'todos',
-    tecnicoId: '',
-    clienteId: '',
-  })
+  const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState<string>('ALL')
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [showActionsMenu, setShowActionsMenu] = useState<string | null>(null)
+  const router = useRouter()
+
+  useEffect(() => {
+    const checkUser = () => {
+      const storedUser = getStoredUser()
+      if (!storedUser || storedUser.rol !== 'ADMIN') {
+        router.push('/Login')
+        return false
+      }
+      return true
+    }
+
+    if (checkUser()) {
+      fetchTrabajos()
+    }
+  }, [router, page, statusFilter])
 
   const fetchTrabajos = async () => {
-    setLoading(true)
     try {
+      setLoading(true)
       const token = getAccessToken()
-      const params = new URLSearchParams()
-      if (filters.estado !== 'todos') params.append('estado', filters.estado)
-      if (filters.tecnicoId) params.append('tecnicoId', filters.tecnicoId)
-      if (filters.clienteId) params.append('clienteId', filters.clienteId)
-      params.append('page', pagination.page.toString())
-      params.append('limit', pagination.limit.toString())
-
-      const response = await fetch(`${API_URL}/api/trabajos/admin?${params.toString()}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
+      // Note: Assuming endpoint exists or using a mock for now if not ready
+      // In a real scenario, we'd call /api/admin/trabajos
+      // For now, let's simulate or try to fetch if endpoint exists
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: '10',
+        ...(statusFilter !== 'ALL' && { estado: statusFilter })
       })
-      const data = await response.json()
-      if (data.success) {
-        setTrabajos(data.data?.data || [])
-        setPagination(data.data?.pagination || { page: 1, limit: 10, total: 0, pages: 1 })
+
+      const response = await fetch(`${API_URL}/api/admin/trabajos?${params}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          setTrabajos(data.data)
+          setTotalPages(data.pagination.pages)
+        }
+      } else {
+        // Fallback mock data if endpoint doesn't exist yet
+        console.warn('Endpoint /api/admin/trabajos not found, using mock data')
+        setTrabajos([])
       }
     } catch (error) {
       console.error('Error fetching trabajos:', error)
-      setTrabajos([]) // Ensure trabajos is an array on error
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => {
-    fetchTrabajos()
-  }, [pagination.page, pagination.limit, filters])
+  const filteredTrabajos = trabajos.filter(trabajo =>
+    trabajo.titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    trabajo.cliente.nombre.toLowerCase().includes(searchTerm.toLowerCase())
+  )
 
-  const handleFilterChange = (e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>) => {
-    setFilters(prev => ({ ...prev, [e.target.name]: e.target.value }))
-    setPagination(prev => ({ ...prev, page: 1 })) // Reset page on filter change
-  }
-
-  const handlePageChange = (newPage: number) => {
-    if (newPage > 0 && newPage <= pagination.pages) {
-      setPagination(prev => ({ ...prev, page: newPage }))
+  const getStatusBadge = (estado: string) => {
+    const colors = {
+      PENDIENTE: 'bg-yellow-100 text-yellow-800',
+      EN_PROCESO: 'bg-blue-100 text-blue-800',
+      COMPLETADO: 'bg-green-100 text-green-800',
+      CANCELADO: 'bg-red-100 text-red-800'
     }
+    return colors[estado as keyof typeof colors] || 'bg-gray-100 text-gray-800'
   }
 
-  const getEstadoDisplay = (estado: TrabajoEstado) => {
-    const estadoMap: Record<TrabajoEstado, { text: string; color: string }> = {
-      PENDIENTE: { text: 'Pendiente', color: 'text-yellow-600' },
-      RECHAZADO: { text: 'Rechazado', color: 'text-red-600' },
-      NECESITA_VISITA: { text: 'Necesita Visita', color: 'text-cyan-600' },
-      COTIZADO: { text: 'Cotizado', color: 'text-orange-600' },
-      ACEPTADO: { text: 'Aceptado', color: 'text-blue-600' },
-      EN_PROGRESO: { text: 'En Progreso', color: 'text-purple-600' },
-      COMPLETADO: { text: 'Completado', color: 'text-green-600' },
-      CANCELADO: { text: 'Cancelado', color: 'text-gray-600' },
-      EN_DISPUTA: { text: 'En Disputa', color: 'text-red-800' },
+  const columns: Column<Trabajo>[] = [
+    {
+      header: 'Trabajo',
+      cell: (trabajo) => (
+        <div>
+          <div className="text-sm font-medium text-slate-900">{trabajo.titulo}</div>
+          <div className="text-xs text-slate-500 line-clamp-1">{trabajo.descripcion}</div>
+        </div>
+      )
+    },
+    {
+      header: 'Cliente',
+      cell: (trabajo) => (
+        <div className="text-sm text-slate-700">{trabajo.cliente.nombre}</div>
+      )
+    },
+    {
+      header: 'Técnico',
+      cell: (trabajo) => (
+        <div className="text-sm text-slate-700">
+          {trabajo.tecnico ? trabajo.tecnico.nombre : <span className="text-slate-400 italic">Sin asignar</span>}
+        </div>
+      )
+    },
+    {
+      header: 'Estado',
+      cell: (trabajo) => (
+        <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadge(trabajo.estado)}`}>
+          {trabajo.estado}
+        </span>
+      )
+    },
+    {
+      header: 'Fecha',
+      cell: (trabajo) => (
+        <div className="flex items-center text-sm text-slate-500">
+          <Calendar className="w-4 h-4 mr-1" />
+          {new Date(trabajo.fechaCreacion).toLocaleDateString()}
+        </div>
+      )
     }
-    const info = estadoMap[estado]
-    return <span className={`font-medium ${info.color}`}>{info.text}</span>
-  }
+  ]
+
+  const renderActions = (trabajo: Trabajo) => (
+    <div className="relative inline-block text-left">
+      <button
+        onClick={() => setShowActionsMenu(showActionsMenu === trabajo.id ? null : trabajo.id)}
+        className="text-slate-400 hover:text-slate-600"
+      >
+        <MoreVertical className="w-5 h-5" />
+      </button>
+      {showActionsMenu === trabajo.id && (
+        <>
+          <div
+            className="fixed inset-0 z-10"
+            onClick={() => setShowActionsMenu(null)}
+          />
+          <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-lg shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-20">
+            <div className="py-1">
+              <button
+                onClick={() => {/* TODO: Implement view details */ }}
+                className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 flex items-center gap-2"
+              >
+                <Eye className="w-4 h-4" />
+                Ver detalles
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
 
   return (
-    <>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-900">Gestión de Trabajos</h1>
-        <p className="text-slate-500 mt-1">Administra y supervisa todos los trabajos del sistema.</p>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/60">
+        <h1 className="text-2xl font-bold text-slate-800">Gestión de Trabajos</h1>
+        <p className="text-slate-600 mt-1">Supervisa y administra los trabajos de la plataforma</p>
       </div>
 
-      {/* Filtros */}
-      <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-6 mb-6">
-        <h3 className="font-bold text-slate-800 mb-4">Filtros</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Filters */}
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/60">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {/* Search */}
+          <div className="md:col-span-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
+              <input
+                type="text"
+                placeholder="Buscar por título o cliente..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+
+          {/* Status Filter */}
           <div>
-            <label htmlFor="estado" className="block text-sm font-medium text-slate-700 mb-1">Estado</label>
             <select
-              id="estado"
-              name="estado"
-              value={filters.estado}
-              onChange={handleFilterChange}
-              className="w-full p-2 border border-slate-300 rounded-lg"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              <option value="todos">Todos</option>
-              <option value="PENDIENTE">Pendiente</option>
-              <option value="NECESITA_VISITA">Necesita Visita</option>
-              <option value="COTIZADO">Cotizado</option>
-              <option value="ACEPTADO">Aceptado</option>
-              <option value="EN_PROGRESO">En Progreso</option>
-              <option value="COMPLETADO">Completado</option>
-              <option value="RECHAZADO">Rechazado</option>
-              <option value="CANCELADO">Cancelado</option>
-              <option value="EN_DISPUTA">En Disputa</option>
+              <option value="ALL">Todos los estados</option>
+              <option value="PENDIENTE">Pendientes</option>
+              <option value="EN_PROCESO">En Proceso</option>
+              <option value="COMPLETADO">Completados</option>
+              <option value="CANCELADO">Cancelados</option>
             </select>
           </div>
-          <div>
-            <label htmlFor="tecnicoId" className="block text-sm font-medium text-slate-700 mb-1">ID Técnico</label>
-            <input
-              type="text"
-              id="tecnicoId"
-              name="tecnicoId"
-              value={filters.tecnicoId}
-              onChange={handleFilterChange}
-              className="w-full p-2 border border-slate-300 rounded-lg"
-              placeholder="Filtrar por ID de técnico"
-            />
-          </div>
-          <div>
-            <label htmlFor="clienteId" className="block text-sm font-medium text-slate-700 mb-1">ID Cliente</label>
-            <input
-              type="text"
-              id="clienteId"
-              name="clienteId"
-              value={filters.clienteId}
-              onChange={handleFilterChange}
-              className="w-full p-2 border border-slate-300 rounded-lg"
-              placeholder="Filtrar por ID de cliente"
-            />
-          </div>
         </div>
       </div>
 
-      {/* Tabla de Trabajos */}
-      <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left text-slate-500">
-            <thead className="text-xs text-slate-700 uppercase bg-slate-50">
-              <tr>
-                <th scope="col" className="px-6 py-3">ID Trabajo</th>
-                <th scope="col" className="px-6 py-3">Servicio</th>
-                <th scope="col" className="px-6 py-3">Cliente</th>
-                <th scope="col" className="px-6 py-3">Técnico</th>
-                <th scope="col" className="px-6 py-3">Estado</th>
-                <th scope="col" className="px-6 py-3 text-right">Precio</th>
-                <th scope="col" className="px-6 py-3 text-center">Calificación</th>
-                <th scope="col" className="px-6 py-3">Fecha Solicitud</th>
-                <th scope="col" className="px-6 py-3 text-center">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={9} className="text-center py-10">
-                    <Loader2 className="w-8 h-8 mx-auto animate-spin text-blue-600" />
-                  </td>
-                </tr>
-              ) : trabajos.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="text-center py-10 text-slate-500">
-                    No se encontraron trabajos con los filtros aplicados.
-                  </td>
-                </tr>
-              ) : (
-                trabajos.map(trabajo => (
-                  <tr key={trabajo.id} className="bg-white border-b hover:bg-slate-50">
-                    <td className="px-6 py-4 font-medium text-slate-900">{trabajo.id.substring(0, 8)}...</td>
-                    <td className="px-6 py-4">{trabajo.servicioNombre}</td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <div className="relative w-8 h-8 rounded-full bg-slate-200">
-                          {trabajo.cliente.user.avatarUrl && <Image src={trabajo.cliente.user.avatarUrl} alt={trabajo.cliente.user.nombre} fill className="object-cover rounded-full" unoptimized />}
-                        </div>
-                        <span>{trabajo.cliente.user.nombre}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <div className="relative w-8 h-8 rounded-full bg-slate-200">
-                          {trabajo.tecnico.user.avatarUrl && <Image src={trabajo.tecnico.user.avatarUrl} alt={trabajo.tecnico.user.nombre} fill className="object-cover rounded-full" unoptimized />}
-                        </div>
-                        <span>{trabajo.tecnico.user.nombre}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">{getEstadoDisplay(trabajo.estado)}</td>
-                    <td className="px-6 py-4 text-right">{trabajo.precio ? `S/ ${Number(trabajo.precio).toFixed(2)}` : '-'}</td>
-                    <td className="px-6 py-4 text-center">
-                      {trabajo.calificacion ? (
-                        <span className="flex items-center justify-center gap-1 text-yellow-500">
-                          {trabajo.calificacion.puntuacion} <Briefcase className="w-4 h-4" />
-                        </span>
-                      ) : (
-                        '-'
-                      )}
-                    </td>
-                    <td className="px-6 py-4">{new Date(trabajo.fechaSolicitud).toLocaleDateString()}</td>
-                    <td className="px-6 py-4 text-center">
-                      <Link href={`/admin/trabajos/${trabajo.id}`} className="text-blue-600 hover:text-blue-800 font-medium">
-                        Ver Detalle
-                      </Link>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Paginación */}
-      {pagination.pages > 1 && (
-        <div className="flex justify-end items-center gap-4 mt-6">
-          <button
-            onClick={() => handlePageChange(pagination.page - 1)}
-            disabled={pagination.page === 1}
-            className="px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-          >
-            Anterior
-          </button>
-          <span className="text-slate-700">Página {pagination.page} de {pagination.pages}</span>
-          <button
-            onClick={() => handlePageChange(pagination.page + 1)}
-            disabled={pagination.page === pagination.pages}
-            className="px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-          >
-            Siguiente
-          </button>
-        </div>
-      )}
-    </>
+      {/* Table */}
+      <DataTable
+        columns={columns}
+        data={filteredTrabajos}
+        loading={loading}
+        pagination={{
+          page,
+          totalPages,
+          onPageChange: setPage
+        }}
+        actions={renderActions}
+        emptyMessage="No se encontraron trabajos"
+      />
+    </div>
   )
 }

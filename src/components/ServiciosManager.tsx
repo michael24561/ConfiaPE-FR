@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { addServicio, deleteServicio } from '@/lib/tecnicoApi'
-import { Loader2, Plus, Trash2, X } from 'lucide-react'
+import { Loader2, Plus, Trash2, X, Briefcase, DollarSign, FileText } from 'lucide-react'
 
 interface Servicio {
   id: string
@@ -66,106 +66,142 @@ export default function ServiciosManager({ initialServicios }: Props) {
   }
 
   return (
-    <div className="bg-white rounded-2xl lg:rounded-3xl shadow-lg lg:shadow-xl p-4 sm:p-6 lg:p-8 border border-gray-100">
-      <div className="flex justify-between items-center mb-6">
-        <h3 className="text-lg sm:text-xl font-black text-gray-900">Mis Servicios</h3>
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h3 className="text-xl font-bold text-slate-900">Mis Servicios</h3>
+          <p className="text-slate-500 text-sm">Define los servicios que ofreces a tus clientes</p>
+        </div>
         {!showForm && (
           <button
             onClick={() => setShowForm(true)}
-            className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-2 rounded-xl font-semibold hover:scale-105 transition-all shadow-lg text-sm"
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl font-semibold hover:bg-blue-700 transition-all shadow-lg shadow-blue-900/20"
           >
-            <Plus className="w-5 h-5" /> Agregar Servicio
+            <Plus className="w-5 h-5" />
+            <span className="hidden sm:inline">Nuevo Servicio</span>
           </button>
         )}
       </div>
 
       {error && (
-        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg">
+        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl animate-in fade-in slide-in-from-top-2">
           <p>{error}</p>
         </div>
       )}
 
       {showForm && (
-        <form onSubmit={handleAddServicio} className="mb-6 p-4 bg-slate-50 rounded-xl border space-y-4">
-          <h4 className="font-bold text-gray-800">Nuevo Servicio</h4>
-          <div>
-            <label htmlFor="nombre" className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
-            <input
-              id="nombre"
-              type="text"
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-lg"
-              required
-            />
-          </div>
-          <div>
-            <label htmlFor="descripcion" className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
-            <textarea
-              id="descripcion"
-              value={descripcion}
-              onChange={(e) => setDescripcion(e.target.value)}
-              rows={2}
-              className="w-full p-2 border border-gray-300 rounded-lg"
-            />
-          </div>
-          <div>
-            <label htmlFor="precio" className="block text-sm font-medium text-gray-700 mb-1">Precio Base (Opcional)</label>
-            <input
-              id="precio"
-              type="number"
-              value={precio}
-              onChange={(e) => setPrecio(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-lg"
-              placeholder="S/"
-              step="0.10"
-            />
-          </div>
-          <div className="flex gap-4">
-            <button
-              type="submit"
-              disabled={loading}
-              className="inline-flex items-center justify-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg font-semibold disabled:opacity-50"
-            >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-              Guardar Servicio
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowForm(false)}
-              className="inline-flex items-center justify-center gap-2 bg-gray-200 text-gray-800 px-4 py-2 rounded-lg font-semibold"
-            >
-              <X className="w-4 h-4" /> Cancelar
+        <div className="bg-slate-50 rounded-2xl border border-slate-200 p-6 animate-in fade-in slide-in-from-top-4">
+          <div className="flex justify-between items-center mb-4">
+            <h4 className="font-bold text-slate-800 text-lg">Agregar Nuevo Servicio</h4>
+            <button onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-600">
+              <X className="w-5 h-5" />
             </button>
           </div>
-        </form>
+
+          <form onSubmit={handleAddServicio} className="space-y-4">
+            <div>
+              <label htmlFor="nombre" className="block text-sm font-semibold text-slate-700 mb-1.5">Nombre del Servicio *</label>
+              <div className="relative">
+                <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                <input
+                  id="nombre"
+                  type="text"
+                  value={nombre}
+                  onChange={(e) => setNombre(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 bg-white"
+                  placeholder="Ej: Instalación de Tomacorrientes"
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="descripcion" className="block text-sm font-semibold text-slate-700 mb-1.5">Descripción</label>
+              <div className="relative">
+                <FileText className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
+                <textarea
+                  id="descripcion"
+                  value={descripcion}
+                  onChange={(e) => setDescripcion(e.target.value)}
+                  rows={3}
+                  className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 bg-white resize-none"
+                  placeholder="Detalla qué incluye este servicio..."
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="precio" className="block text-sm font-semibold text-slate-700 mb-1.5">Precio Base (Opcional)</label>
+              <div className="relative">
+                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                <input
+                  id="precio"
+                  type="number"
+                  value={precio}
+                  onChange={(e) => setPrecio(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 bg-white"
+                  placeholder="0.00"
+                  step="0.10"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowForm(false)}
+                className="flex-1 px-4 py-2.5 border border-slate-300 text-slate-700 font-semibold rounded-xl hover:bg-white transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex-1 px-4 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
+                Guardar Servicio
+              </button>
+            </div>
+          </form>
+        </div>
       )}
 
       {servicios.length > 0 ? (
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 gap-4">
           {servicios.map((servicio) => (
-            <div key={servicio.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border hover:border-gray-300">
-              <div>
-                <p className="font-bold text-gray-800">{servicio.nombre}</p>
-                {servicio.descripcion && <p className="text-sm text-gray-600">{servicio.descripcion}</p>}
+            <div key={servicio.id} className="group bg-white border border-slate-200 rounded-2xl p-5 hover:shadow-md transition-all duration-300 hover:border-blue-200 flex justify-between items-start">
+              <div className="flex-1 pr-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <h4 className="font-bold text-slate-900 text-lg">{servicio.nombre}</h4>
+                  {servicio.precio && (
+                    <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                      S/ {Number(servicio.precio).toFixed(2)}
+                    </span>
+                  )}
+                </div>
+                {servicio.descripcion && <p className="text-slate-600 text-sm leading-relaxed">{servicio.descripcion}</p>}
               </div>
-              <div className="flex items-center gap-4">
-                {servicio.precio && <p className="font-semibold text-blue-600">S/ {Number(servicio.precio).toFixed(2)}</p>}
-                <button
-                  onClick={() => handleDeleteServicio(servicio.id)}
-                  className="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-100"
-                >
-                  <Trash2 className="w-5 h-5" />
-                </button>
-              </div>
+              <button
+                onClick={() => handleDeleteServicio(servicio.id)}
+                className="text-slate-400 hover:text-red-500 p-2 rounded-lg hover:bg-red-50 transition-colors"
+                title="Eliminar servicio"
+              >
+                <Trash2 className="w-5 h-5" />
+              </button>
             </div>
           ))}
         </div>
       ) : (
-        <div className="text-center py-10 text-gray-500">
-          <p>No has agregado ningún servicio específico.</p>
-          <p className="text-sm mt-2">Haz clic en "Agregar Servicio" para empezar.</p>
-        </div>
+        !showForm && (
+          <div className="text-center py-12 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+            <Briefcase className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+            <p className="text-slate-500 font-medium">No tienes servicios registrados</p>
+            <button onClick={() => setShowForm(true)} className="text-blue-600 text-sm font-semibold mt-2 hover:underline">
+              Agregar el primero
+            </button>
+          </div>
+        )
       )}
     </div>
   )

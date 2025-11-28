@@ -27,6 +27,8 @@ const disponibilidadInicial: DisponibilidadState = {
   domingo: { inicio: '09:00', fin: '13:00', disponible: false }
 }
 
+import CalendarioDisponibilidad from "@/components/tecnicocomponents/CalendarioDisponibilidad"
+
 export default function DisponibilidadPage() {
   const [user, setUser] = useState<any>(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -89,7 +91,7 @@ export default function DisponibilidadPage() {
         body: JSON.stringify({ horarios: horariosArray })
       })
       if (response.ok) {
-        alert('Cambios guardados exitosamente')
+        alert('Horario semanal guardado exitosamente')
       } else { throw new Error('Error al guardar cambios') }
     } catch (error) {
       console.error('Error guardando disponibilidad:', error)
@@ -101,53 +103,75 @@ export default function DisponibilidadPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">
-      <HeaderTecnico onMenuClick={() => setSidebarOpen(!sidebarOpen)} onNotificationClick={() => {}} notifications={[]} user={user} />
+      <HeaderTecnico onMenuClick={() => setSidebarOpen(!sidebarOpen)} user={user} />
       <div className="flex relative">
         <TecnicoSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} onToggle={() => setSidebarOpen(!sidebarOpen)} />
         <main className={`flex-1 pt-20 transition-all duration-300 ${sidebarOpen ? 'lg:ml-72' : 'lg:ml-0'}`}>
-          <div className="px-4 sm:px-8 py-8 max-w-4xl mx-auto">
-            <div className="mb-10">
-              <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-2">Disponibilidad</h1>
-              <p className="text-slate-500 text-lg">Configura tus horarios de trabajo semanales.</p>
+          <div className="px-4 sm:px-8 py-8 max-w-6xl mx-auto">
+            <div className="mb-8">
+              <h1 className="text-3xl font-bold text-slate-900 mb-2">Gestión de Disponibilidad</h1>
+              <p className="text-slate-500">Configura tu horario semanal y gestiona excepciones (vacaciones, días libres).</p>
             </div>
 
             {loading ? (
               <div className="flex justify-center items-center py-20"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>
             ) : (
-              <div className="bg-white rounded-2xl shadow-sm p-6 md:p-8 border border-slate-200/60">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+
+                {/* Columna 1: Horario Semanal */}
                 <div className="space-y-6">
-                  {diasSemana.map((dia) => {
-                    const diaKey = dia.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-                    const configDia = disponibilidad[diaKey]
-                    return (
-                      <div key={dia} className="p-4 rounded-lg border border-slate-200">
-                        <div className="flex items-center justify-between">
-                          <h4 className="font-bold text-slate-800">{dia}</h4>
-                          <label className="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" checked={configDia.disponible} onChange={(e) => handleCambioDisponibilidad(diaKey, 'disponible', e.target.checked)} className="sr-only peer" />
-                            <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                          </label>
-                        </div>
-                        {configDia.disponible && (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                            <TimeSelector label="Inicio" value={configDia.inicio} onChange={(val) => handleCambioDisponibilidad(diaKey, 'inicio', val)} />
-                            <TimeSelector label="Fin" value={configDia.fin} onChange={(val) => handleCambioDisponibilidad(diaKey, 'fin', val)} />
+                  <div className="bg-white rounded-2xl shadow-sm p-6 border border-slate-200">
+                    <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
+                      📅 Horario Semanal Base
+                    </h2>
+                    <p className="text-sm text-slate-500 mb-6">Define tu horario habitual de trabajo. Este horario se aplicará todas las semanas.</p>
+
+                    <div className="space-y-4">
+                      {diasSemana.map((dia) => {
+                        const diaKey = dia.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+                        const configDia = disponibilidad[diaKey]
+                        return (
+                          <div key={dia} className={`p-3 rounded-xl border transition-colors ${configDia.disponible ? 'border-blue-100 bg-blue-50/30' : 'border-slate-100 bg-slate-50'}`}>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-semibold text-slate-700">{dia}</span>
+                              <label className="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" checked={configDia.disponible} onChange={(e) => handleCambioDisponibilidad(diaKey, 'disponible', e.target.checked)} className="sr-only peer" />
+                                <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                              </label>
+                            </div>
+                            {configDia.disponible && (
+                              <div className="flex gap-2">
+                                <TimeSelector value={configDia.inicio} onChange={(val) => handleCambioDisponibilidad(diaKey, 'inicio', val)} />
+                                <span className="text-slate-400 self-center">-</span>
+                                <TimeSelector value={configDia.fin} onChange={(val) => handleCambioDisponibilidad(diaKey, 'fin', val)} />
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    )
-                  })}
+                        )
+                      })}
+                    </div>
+
+                    <div className="mt-6 pt-4 border-t border-slate-100">
+                      <button onClick={guardarCambios} disabled={isSaving} className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-900/20">
+                        {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+                        {isSaving ? 'Guardando...' : 'Guardar Horario Semanal'}
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-4 mt-8 pt-6 border-t border-slate-200">
-                  <button onClick={guardarCambios} disabled={isSaving} className="px-6 py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
-                    {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-                    {isSaving ? 'Guardando...' : 'Guardar Cambios'}
-                  </button>
-                  <button onClick={() => setDisponibilidad(disponibilidadInicial)} className="px-6 py-2.5 bg-slate-200 text-slate-700 font-semibold rounded-lg hover:bg-slate-300 flex items-center gap-2">
-                    <RotateCcw className="w-5 h-5" />
-                    Restablecer
-                  </button>
+
+                {/* Columna 2: Excepciones y Calendario */}
+                <div className="space-y-6">
+                  <div className="bg-white rounded-2xl shadow-sm p-6 border border-slate-200">
+                    <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
+                      ✨ Excepciones y Fechas Específicas
+                    </h2>
+                    <p className="text-sm text-slate-500 mb-6">Haz clic en un día para bloquearlo (vacaciones) o cambiar el horario solo para esa fecha.</p>
+
+                    <CalendarioDisponibilidad />
+                  </div>
                 </div>
+
               </div>
             )}
           </div>
@@ -157,11 +181,8 @@ export default function DisponibilidadPage() {
   )
 }
 
-const TimeSelector = ({ label, value, onChange }: { label: string, value: string, onChange: (val: string) => void }) => (
-  <div>
-    <label className="block text-sm font-medium text-slate-600 mb-1.5">{label}</label>
-    <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-      {horarios.map(h => <option key={h} value={`${h}:00`}>{h}</option>)}
-    </select>
-  </div>
+const TimeSelector = ({ value, onChange }: { value: string, onChange: (val: string) => void }) => (
+  <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full p-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+    {horarios.map(h => <option key={h} value={`${h}:00`}>{h}</option>)}
+  </select>
 )

@@ -6,6 +6,8 @@ import HeaderCliente from '@/components/clientecomponents/HeaderCliente'
 import ClienteSidebar from '@/components/clientecomponents/ClienteSidebar'
 import { getStoredUser, getAccessToken } from '@/lib/auth'
 import TecnicoCard from '@/components/TecnicoCard'
+import ComparisonBar from '@/components/clientecomponents/ComparisonBar'
+import ComparisonModal from '@/components/clientecomponents/ComparisonModal'
 import { Search, X, ChevronDown, SlidersHorizontal } from 'lucide-react'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
@@ -38,8 +40,14 @@ export default function ClienteBuscarPage() {
     sortBy: 'rating_desc',
     showAvailable: true,
     showVerified: false,
+    date: '',
   })
   const [isMobile, setIsMobile] = useState(false)
+
+  // Comparison State
+  const [comparisonList, setComparisonList] = useState<Tecnico[]>([])
+  const [comparisonModalOpen, setComparisonModalOpen] = useState(false)
+
   const router = useRouter()
 
   const categories = useMemo(() => [
@@ -84,7 +92,11 @@ export default function ClienteBuscarPage() {
         if (searchQuery) params.append('q', searchQuery)
         if (filters.showAvailable) params.append('disponible', 'true')
         if (filters.showVerified) params.append('verificado', 'true')
-        
+        if (filters.date) params.append('date', filters.date)
+
+        // Note: Sorting is applied client-side for now as backend doesn't support it yet.
+        // params.append('sortBy', filters.sortBy)
+
         // Note: Sorting is applied client-side for now as backend doesn't support it yet.
         // params.append('sortBy', filters.sortBy)
 
@@ -95,7 +107,7 @@ export default function ClienteBuscarPage() {
 
         const response = await fetch(requestUrl, { headers })
         if (!response.ok) throw new Error('Error fetching technicians')
-        
+
         const data = await response.json()
         if (data.success) {
           let tecnicosData = data.data.data || data.data || []
@@ -132,6 +144,25 @@ export default function ClienteBuscarPage() {
     setFilters(prev => ({ ...prev, [key]: value }))
   }
 
+  // Comparison Logic
+  const handleToggleCompare = (tecnico: Tecnico) => {
+    setComparisonList(prev => {
+      const exists = prev.find(t => t.id === tecnico.id)
+      if (exists) {
+        return prev.filter(t => t.id !== tecnico.id)
+      }
+      if (prev.length >= 3) {
+        alert('Puedes comparar hasta 3 técnicos a la vez.')
+        return prev
+      }
+      return [...prev, tecnico]
+    })
+  }
+
+  const handleRemoveCompare = (id: string) => {
+    setComparisonList(prev => prev.filter(t => t.id !== id))
+  }
+
   if (!user) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-slate-50">
@@ -141,11 +172,9 @@ export default function ClienteBuscarPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800">
+    <div className="min-h-screen bg-slate-50 text-slate-800 pb-24">
       <HeaderCliente
         onMenuClick={() => setSidebarOpen(!sidebarOpen)}
-        onNotificationClick={() => {}}
-        notifications={[]}
         user={user}
       />
 
@@ -215,26 +244,39 @@ export default function ClienteBuscarPage() {
                     ))}
                   </select>
                 </div>
+                <div>
+                  <label htmlFor="date" className="block text-sm font-semibold text-slate-700 mb-2">
+                    Fecha deseada
+                  </label>
+                  <input
+                    type="date"
+                    id="date"
+                    value={filters.date}
+                    onChange={(e) => handleFilterChange('date', e.target.value)}
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900"
+                    min={new Date().toISOString().split('T')[0]}
+                  />
+                </div>
               </div>
               <div className="flex items-center gap-6 mt-4 pt-4 border-t border-slate-200/80">
-                  <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-700">
-                    <input
-                      type="checkbox"
-                      checked={filters.showAvailable}
-                      onChange={(e) => handleFilterChange('showAvailable', e.target.checked)}
-                      className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    Mostrar solo disponibles
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-700">
-                    <input
-                      type="checkbox"
-                      checked={filters.showVerified}
-                      onChange={(e) => handleFilterChange('showVerified', e.target.checked)}
-                      className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    Solo verificados
-                  </label>
+                <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={filters.showAvailable}
+                    onChange={(e) => handleFilterChange('showAvailable', e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  Mostrar solo disponibles
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={filters.showVerified}
+                    onChange={(e) => handleFilterChange('showVerified', e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  Solo verificados
+                </label>
               </div>
             </div>
 
@@ -261,14 +303,17 @@ export default function ClienteBuscarPage() {
                         id: tecnico.id,
                         nombre: `${tecnico.nombres} ${tecnico.apellidos}`,
                         oficio: tecnico.oficio,
-                        estrellas: Number(tecnico.calificacionPromedio),
                         imagen: tecnico.user.avatarUrl || '',
                         descripcion: tecnico.descripcion,
                         trabajosCompletados: tecnico.trabajosCompletados,
-                       
                         calificacionPromedio: Number(tecnico.calificacionPromedio),
-                        esFavorito: tecnico.esFavorito || false
+                        esFavorito: tecnico.esFavorito || false,
+                        verificado: tecnico.verificado,
+                        disponible: tecnico.disponible,
+                        ubicacion: tecnico.ubicacion
                       }}
+                      isSelected={comparisonList.some(t => t.id === tecnico.id)}
+                      onToggleCompare={() => handleToggleCompare(tecnico)}
                     />
                   ))}
                 </div>
@@ -277,6 +322,22 @@ export default function ClienteBuscarPage() {
           </div>
         </main>
       </div>
+
+      {/* Comparison Bar */}
+      <ComparisonBar
+        selectedTechs={comparisonList.map(t => ({ id: t.id, nombre: t.nombres, imagen: t.user.avatarUrl }))}
+        onRemove={handleRemoveCompare}
+        onClear={() => setComparisonList([])}
+        onCompare={() => setComparisonModalOpen(true)}
+      />
+
+      {/* Comparison Modal */}
+      <ComparisonModal
+        isOpen={comparisonModalOpen}
+        onClose={() => setComparisonModalOpen(false)}
+        selectedIds={comparisonList.map(t => t.id)}
+        onRemove={handleRemoveCompare}
+      />
     </div>
   )
 }
