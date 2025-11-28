@@ -385,7 +385,11 @@ export default function TrabajoDetallePage({ params }: { params: Promise<{ id: s
           <ReportarTrabajoModal
             isOpen={reportarModalOpen}
             onClose={() => setReportarModalOpen(false)}
-            trabajo={trabajo}
+            trabajoId={trabajo.id}
+            onSuccess={() => {
+              setReportarModalOpen(false)
+              fetchTrabajo()
+            }}
           />
         </>
       )}

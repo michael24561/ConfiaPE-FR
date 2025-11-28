@@ -104,20 +104,22 @@ export default function TrabajosClientPage() {
       <HeaderCliente onMenuClick={() => setSidebarOpen(!sidebarOpen)} onNotificationClick={() => { }} notifications={[]} user={user} />
       <div className="flex relative">
         <ClienteSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} onToggle={() => setSidebarOpen(!sidebarOpen)} />
-        <main className={`flex-1 pt-20 transition-all duration-300 ${sidebarOpen ? 'lg:ml-72' : 'lg:ml-0'}`}>
-          <div className="px-4 sm:px-8 py-8 max-w-7xl mx-auto">
+        <main className={`flex-1 pt-20 transition-all duration-300 w-full max-w-full overflow-x-hidden ${sidebarOpen ? 'lg:ml-72' : 'lg:ml-0'}`}>
+          <div className="px-4 sm:px-8 py-8 max-w-7xl mx-auto w-full">
             <div className="mb-10">
               <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-2">Mis Trabajos</h1>
               <p className="text-slate-500 text-lg">Gestiona tus solicitudes de servicio y consulta su estado.</p>
             </div>
 
-            <div className="mb-6 border-b border-slate-200 overflow-x-auto">
-              <div className="flex items-center gap-4 sm:gap-6 whitespace-nowrap">
-                {filterOptions.map(estado => (
-                  <button key={estado} onClick={() => setFilter(estado)} className={`px-1 sm:px-3 py-3 text-sm sm:text-base font-semibold transition-all duration-200 border-b-2 ${filter === estado ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
-                    {estado.charAt(0).toUpperCase() + estado.slice(1).toLowerCase().replace('_', ' ')}
-                  </button>
-                ))}
+            <div className="relative z-10 mb-8 border-b border-slate-200 w-full">
+              <div className="overflow-x-auto pb-1 w-full">
+                <div className="flex items-center gap-4 sm:gap-6 whitespace-nowrap px-1 min-w-max">
+                  {filterOptions.map(estado => (
+                    <button key={estado} onClick={() => setFilter(estado)} className={`px-1 sm:px-3 py-3 text-sm sm:text-base font-semibold transition-all duration-200 border-b-2 ${filter === estado ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
+                      {estado.charAt(0).toUpperCase() + estado.slice(1).toLowerCase().replace('_', ' ')}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -133,7 +135,7 @@ export default function TrabajosClientPage() {
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-4">
+              <div className="grid grid-cols-1 gap-4 w-full">
                 {trabajos.map(trabajo => (
                   <TrabajoCard key={trabajo.id} trabajo={trabajo} />
                 ))}
@@ -154,8 +156,8 @@ const TrabajoCard = ({ trabajo }: { trabajo: Trabajo }) => {
   return (
     <Link href={`/cliente/trabajos/${trabajo.id}`} className="block group">
       <div className="bg-white rounded-xl shadow-sm border border-slate-200/60 p-5 transition-all duration-200 hover:shadow-md hover:border-blue-200">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4 min-w-0 flex-1">
             <div className="relative w-12 h-12 rounded-full overflow-hidden bg-slate-100 border border-slate-200 flex-shrink-0">
               {trabajo.tecnico.user.avatarUrl ? (
                 <Image src={trabajo.tecnico.user.avatarUrl} alt={trabajo.tecnico.nombres} fill className="object-cover" />
@@ -163,16 +165,16 @@ const TrabajoCard = ({ trabajo }: { trabajo: Trabajo }) => {
                 <User className="w-6 h-6 text-slate-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
               )}
             </div>
-            <div>
-              <h3 className="font-bold text-slate-800 group-hover:text-blue-600 transition-colors">{trabajo.servicioNombre}</h3>
-              <p className="text-sm text-slate-500">con {trabajo.tecnico.nombres} {trabajo.tecnico.apellidos}</p>
+            <div className="min-w-0 flex-1">
+              <h3 className="font-bold text-slate-800 group-hover:text-blue-600 transition-colors truncate">{trabajo.servicioNombre}</h3>
+              <p className="text-sm text-slate-500 truncate">con {trabajo.tecnico.nombres} {trabajo.tecnico.apellidos}</p>
               <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
-                <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {new Date(trabajo.fechaSolicitud).toLocaleDateString('es-PE')}</span>
+                <span className="flex items-center gap-1 flex-shrink-0"><Calendar className="w-3 h-3" /> {new Date(trabajo.fechaSolicitud).toLocaleDateString('es-PE')}</span>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-shrink-0">
             <div className={`hidden sm:flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold ${estadoInfo.style}`}>
               <estadoInfo.icon className="w-3.5 h-3.5" />
               <span>{estadoInfo.text}</span>

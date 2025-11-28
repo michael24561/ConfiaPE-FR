@@ -49,21 +49,28 @@ export default function SmartCalendar({ tecnicoId, onSelect }: SmartCalendarProp
 
     const checkDayAvailability = async (date: Date) => {
         const dateStr = date.toISOString().split('T')[0]
+        console.log(`[SmartCalendar] Checking availability for date: ${dateStr}`);
 
         // Check cache first
         if (availabilityCache[dateStr]) {
+            console.log(`[SmartCalendar] Cache hit for ${dateStr}:`, availabilityCache[dateStr]);
             setDayAvailability(availabilityCache[dateStr])
             return
         }
 
         setLoadingDay(true)
         try {
-            const response = await fetch(`${API_URL}/api/tecnicos/${tecnicoId}/disponibilidad/check?date=${dateStr}`)
+            const url = `${API_URL}/api/tecnicos/${tecnicoId}/disponibilidad/check?date=${dateStr}`;
+            console.log(`[SmartCalendar] Fetching: ${url}`);
+            const response = await fetch(url)
             if (response.ok) {
                 const data = await response.json()
+                console.log(`[SmartCalendar] Response for ${dateStr}:`, data);
                 const result = data.data
                 setAvailabilityCache(prev => ({ ...prev, [dateStr]: result }))
                 setDayAvailability(result)
+            } else {
+                console.error(`[SmartCalendar] Error response: ${response.status}`);
             }
         } catch (error) {
             console.error('Error checking availability:', error)
@@ -118,6 +125,7 @@ export default function SmartCalendar({ tecnicoId, onSelect }: SmartCalendarProp
 
             daysArray.push(
                 <button
+                    type="button"
                     key={i}
                     onClick={() => !isPast && handleDateClick(i)}
                     disabled={isPast}
@@ -142,8 +150,8 @@ export default function SmartCalendar({ tecnicoId, onSelect }: SmartCalendarProp
                     {currentDate.toLocaleString('es-ES', { month: 'long', year: 'numeric' })}
                 </h3>
                 <div className="flex gap-1">
-                    <button onClick={handlePrevMonth} className="p-1.5 hover:bg-white hover:shadow-sm rounded-md transition-all"><ChevronLeft className="w-5 h-5 text-slate-600" /></button>
-                    <button onClick={handleNextMonth} className="p-1.5 hover:bg-white hover:shadow-sm rounded-md transition-all"><ChevronRight className="w-5 h-5 text-slate-600" /></button>
+                    <button type="button" onClick={handlePrevMonth} className="p-1.5 hover:bg-white hover:shadow-sm rounded-md transition-all"><ChevronLeft className="w-5 h-5 text-slate-600" /></button>
+                    <button type="button" onClick={handleNextMonth} className="p-1.5 hover:bg-white hover:shadow-sm rounded-md transition-all"><ChevronRight className="w-5 h-5 text-slate-600" /></button>
                 </div>
             </div>
 
@@ -177,6 +185,7 @@ export default function SmartCalendar({ tecnicoId, onSelect }: SmartCalendarProp
                             <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                                 {generateTimeSlots(dayAvailability.horaInicio || '09:00', dayAvailability.horaFin || '18:00').map(time => (
                                     <button
+                                        type="button"
                                         key={time}
                                         onClick={() => handleTimeSelect(time)}
                                         className={`

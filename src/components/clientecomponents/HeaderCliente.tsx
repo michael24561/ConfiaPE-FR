@@ -46,7 +46,13 @@ export default function HeaderCliente({
       <div className="h-20 px-4 sm:px-6 lg:px-8 flex items-center justify-between">
         {/* Left side */}
         <div className="flex items-center gap-4">
-         
+          <button
+            onClick={onMenuClick}
+            className="p-2 rounded-lg hover:bg-slate-100 transition-colors lg:hidden"
+            aria-label="Toggle Menu"
+          >
+            <PanelLeftClose className="w-6 h-6 text-slate-700" />
+          </button>
           <div className="hidden sm:flex items-center">
             <img
               src="/images/ConfiaPE.png"
@@ -151,12 +157,7 @@ export default function HeaderCliente({
           </div>
         </div>
       </div>
-      <button
-        onClick={onMenuClick}
-        className="fixed top-4 left-4 z-50 p-2 rounded-xl bg-white/50 hover:bg-gray-100 transition-colors"
-      >
-        <PanelLeftClose className="w-6 h-6 text-gray-700" />
-      </button>
+
     </header>
   )
 }

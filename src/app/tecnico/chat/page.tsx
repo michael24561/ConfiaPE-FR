@@ -56,12 +56,29 @@ function TecnicoChatPageContent() {
         const convsArray = Array.isArray(convs) ? convs : []
         setConversations(convsArray)
 
-        // Logic to pre-select a chat from query params can be added here if needed
+        // Handle query params
         const chatIdFromQuery = searchParams.get('chatId')
+        const clienteIdFromQuery = searchParams.get('clienteId')
+
         if (chatIdFromQuery) {
           const chat = convsArray.find(c => c.id === chatIdFromQuery)
-          if (chat) {
-            setSelectedChat(chat)
+          if (chat) setSelectedChat(chat)
+        } else if (clienteIdFromQuery) {
+          // Check if chat already exists
+          const existingChat = convsArray.find(c => c.clienteId === clienteIdFromQuery)
+          if (existingChat) {
+            setSelectedChat(existingChat)
+          } else {
+            // Create new chat
+            try {
+              // Dynamic import to avoid circular dependency issues if any, or just standard import
+              const { createConversation } = await import('@/lib/chat')
+              const newChat = await createConversation({ clienteId: clienteIdFromQuery })
+              setConversations(prev => [newChat, ...prev])
+              setSelectedChat(newChat)
+            } catch (err) {
+              console.error('Error creating chat:', err)
+            }
           }
         } else if (convsArray.length > 0 && !isMobile) {
           setSelectedChat(convsArray[0])
@@ -129,7 +146,7 @@ function TecnicoChatPageContent() {
 
   return (
     <div className="h-screen bg-slate-50 text-slate-800 flex flex-col">
-      <HeaderTecnico onMenuClick={() => setSidebarOpen(!sidebarOpen)} onNotificationClick={() => {}} notifications={[]} user={user} />
+      <HeaderTecnico onMenuClick={() => setSidebarOpen(!sidebarOpen)} onNotificationClick={() => { }} notifications={[]} user={user} />
       <div className="flex relative flex-1 overflow-y-hidden">
         <TecnicoSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} onToggle={() => setSidebarOpen(!sidebarOpen)} />
         <main className={`flex-1 pt-20 flex flex-col transition-all duration-300 ${sidebarOpen ? 'lg:ml-72' : 'lg:ml-0'}`}>
