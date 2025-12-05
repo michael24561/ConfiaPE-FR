@@ -12,7 +12,6 @@ export interface RequestOptions {
 
 export async function request<T>({ method = 'GET', path, body, headers = {}, token }: RequestOptions): Promise<T> {
   const url = `${BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
-  console.log(`[API Request] ${method} ${url}`);
 
   const finalHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -29,8 +28,6 @@ export async function request<T>({ method = 'GET', path, body, headers = {}, tok
 
   const isJson = res.headers.get('content-type')?.includes('application/json');
   const payload = isJson ? await res.json() : await res.text();
-
-  console.log(`[API Response] ${res.status} ${res.statusText}`, payload);
 
   if (!res.ok) {
     // Intentar extraer mensaje de error del payload

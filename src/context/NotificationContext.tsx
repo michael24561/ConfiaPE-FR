@@ -64,7 +64,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
       });
 
       socket.on('connect', () => {
-        console.log('Socket.io connected');
+        
       });
 
       socket.on('new_notification', (notification: Notificacion) => {
@@ -79,7 +79,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
       });
 
       socket.on('disconnect', () => {
-        console.log('Socket.io disconnected');
+        
       });
 
       return () => {

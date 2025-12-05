@@ -20,16 +20,7 @@ import ReportarTrabajoModal from '@/components/modals/ReportarTrabajoModal'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
-type TrabajoEstado =
-  | 'PENDIENTE'
-  | 'RECHAZADO'
-  | 'NECESITA_VISITA'
-  | 'COTIZADO'
-  | 'ACEPTADO'
-  | 'EN_PROGRESO'
-  | 'COMPLETADO'
-  | 'CANCELADO'
-  | 'EN_DISPUTA'
+// ... (interface and type definitions remain the same)
 
 interface Trabajo {
   id: string
@@ -58,12 +49,13 @@ interface Trabajo {
   } | null
 }
 
-export default function TrabajoDetallePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params)
-  const [user, setUser] = useState<any>(null)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [trabajo, setTrabajo] = useState<Trabajo | null>(null)
-  const [loading, setLoading] = useState(true)
+export default function TrabajoDetallePage({ params }: { params: Promise<{ id:string }> }) {
+  const { id } = use(params);
+
+  const [user, setUser] = useState<any>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [trabajo, setTrabajo] = useState<Trabajo | null>(null);
+  const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false)
 
   // Modals
@@ -86,19 +78,19 @@ export default function TrabajoDetallePage({ params }: { params: Promise<{ id: s
 
   // --- Socket Connection ---
   useEffect(() => {
-    const socket = connectSocket()
+    const socket = connectSocket();
     if (socket) {
       socket.on('trabajo:estado_actualizado', (data: any) => {
         if (data.id === id || (data.trabajo && data.trabajo.id === id)) {
-          const updatedTrabajo = data.trabajo || data
-          setTrabajo(prev => prev ? { ...prev, ...updatedTrabajo } : updatedTrabajo)
+          const updatedTrabajo = data.trabajo || data;
+          setTrabajo(prev => (prev ? { ...prev, ...updatedTrabajo } : updatedTrabajo));
         }
-      })
+      });
     }
     return () => {
-      socket?.off('trabajo:estado_actualizado')
-    }
-  }, [id])
+      socket?.off('trabajo:estado_actualizado');
+    };
+  }, [id]);
 
   // --- Payment Status Check ---
   useEffect(() => {
@@ -138,8 +130,13 @@ export default function TrabajoDetallePage({ params }: { params: Promise<{ id: s
     if (!trabajo) return
     setActionLoading(true)
     try {
-      const checkoutUrl = await crearPreferenciaPago(trabajo.id)
-      if (checkoutUrl) window.location.href = checkoutUrl
+      const checkoutData = await crearPreferenciaPago(trabajo.id)
+      if (checkoutData && checkoutData.init_point) {
+        window.open(checkoutData.init_point, '_blank', 'noopener,noreferrer')
+      } else {
+        console.error('Error: No se recibió un init_point de la API.')
+        alert('Error al iniciar el pago. No se pudo obtener la URL de pago.')
+      }
     } catch (error) {
       console.error('Error initiating payment:', error)
       alert('Error al iniciar el pago. Intente nuevamente.')
